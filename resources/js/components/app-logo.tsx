@@ -1,9 +1,7 @@
-import { usePage } from '@inertiajs/react';
-
 import AppLogoIcon from '@/components/app-logo-icon';
 
 export default function AppLogo() {
-    const { name } = usePage().props;
+    const name = import.meta.env.VITE_APP_NAME ?? 'ParkAutomation';
 
     return (
         <>

@@ -6,13 +6,6 @@ export type AppLayoutProps = {
     breadcrumbs?: BreadcrumbItem[];
 };
 
-export type AppVariant = 'header' | 'sidebar';
-
-export type FlashToast = {
-    type: 'success' | 'info' | 'warning' | 'error';
-    message: string;
-};
-
 export type AuthLayoutProps = {
     children?: ReactNode;
     name?: string;

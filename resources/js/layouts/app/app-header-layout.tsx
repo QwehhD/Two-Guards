@@ -3,14 +3,11 @@ import { AppHeader } from '@/components/app-header';
 import { AppShell } from '@/components/app-shell';
 import type { AppLayoutProps } from '@/types';
 
-export default function AppHeaderLayout({
-    children,
-    breadcrumbs,
-}: AppLayoutProps) {
+export default function AppHeaderLayout({ children, breadcrumbs }: AppLayoutProps) {
     return (
-        <AppShell variant="header">
+        <AppShell>
             <AppHeader breadcrumbs={breadcrumbs} />
-            <AppContent variant="header">{children}</AppContent>
+            <AppContent>{children}</AppContent>
         </AppShell>
     );
 }

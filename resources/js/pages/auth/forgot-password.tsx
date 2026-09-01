@@ -1,19 +1,40 @@
-// Components
-import { Form, Head } from '@inertiajs/react';
-import { LoaderCircle } from 'lucide-react';
+import { useState } from 'react';
+import type { FormEvent } from 'react';
 import InputError from '@/components/input-error';
 import TextLink from '@/components/text-link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { login } from '@/routes';
-import { email } from '@/routes/password';
+import { Spinner } from '@/components/ui/spinner';
+import { api, ensureCsrfCookie } from '@/services/api';
 
-export default function ForgotPassword({ status }: { status?: string }) {
+export default function ForgotPassword() {
+    const [email, setEmail] = useState('');
+    const [processing, setProcessing] = useState(false);
+    const [status, setStatus] = useState<string | null>(null);
+    const [errors, setErrors] = useState<Record<string, string[]>>({});
+
+    const handleSubmit = async (event: FormEvent) => {
+        event.preventDefault();
+        setProcessing(true);
+        setErrors({});
+        setStatus(null);
+
+        try {
+            await ensureCsrfCookie();
+            const { data } = await api.post('/forgot-password', { email });
+            setStatus(data.status ?? 'We have emailed your password reset link.');
+        } catch (error: any) {
+            if (error.response?.status === 422) {
+                setErrors(error.response.data.errors ?? {});
+            }
+        } finally {
+            setProcessing(false);
+        }
+    };
+
     return (
         <>
-            <Head title="Forgot password" />
-
             {status && (
                 <div className="mb-4 text-center text-sm font-medium text-green-600">
                     {status}
@@ -21,49 +42,39 @@ export default function ForgotPassword({ status }: { status?: string }) {
             )}
 
             <div className="space-y-6">
-                <Form {...email.form()}>
-                    {({ processing, errors }) => (
-                        <>
-                            <div className="grid gap-2">
-                                <Label htmlFor="email">Email address</Label>
-                                <Input
-                                    id="email"
-                                    type="email"
-                                    name="email"
-                                    autoComplete="off"
-                                    autoFocus
-                                    placeholder="email@example.com"
-                                />
+                <form onSubmit={handleSubmit}>
+                    <div className="grid gap-2">
+                        <Label htmlFor="email">Email address</Label>
+                        <Input
+                            id="email"
+                            type="email"
+                            autoComplete="off"
+                            autoFocus
+                            placeholder="email@example.com"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                        />
+                        <InputError message={errors.email?.[0]} />
+                    </div>
 
-                                <InputError message={errors.email} />
-                            </div>
-
-                            <div className="my-6 flex items-center justify-start">
-                                <Button
-                                    className="w-full"
-                                    disabled={processing}
-                                    data-test="email-password-reset-link-button"
-                                >
-                                    {processing && (
-                                        <LoaderCircle className="h-4 w-4 animate-spin" />
-                                    )}
-                                    Email password reset link
-                                </Button>
-                            </div>
-                        </>
-                    )}
-                </Form>
+                    <div className="my-6 flex items-center justify-start">
+                        <Button
+                            type="submit"
+                            className="w-full"
+                            disabled={processing}
+                            data-test="email-password-reset-link-button"
+                        >
+                            {processing && <Spinner />}
+                            Email password reset link
+                        </Button>
+                    </div>
+                </form>
 
                 <div className="text-muted-foreground space-x-1 text-center text-sm">
                     <span>Or, return to</span>
-                    <TextLink href={login()}>log in</TextLink>
+                    <TextLink to="/login">log in</TextLink>
                 </div>
             </div>
         </>
     );
 }
-
-ForgotPassword.layout = {
-    title: 'Forgot password',
-    description: 'Enter your email to receive a password reset link',
-};

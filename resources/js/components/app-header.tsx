@@ -1,5 +1,5 @@
-import { Link, usePage } from '@inertiajs/react';
-import { BookOpen, Folder, LayoutGrid, Menu, Search } from 'lucide-react';
+import { LayoutGrid, Menu } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import AppLogo from '@/components/app-logo';
 import AppLogoIcon from '@/components/app-logo-icon';
 import { Breadcrumbs } from '@/components/breadcrumbs';
@@ -23,16 +23,11 @@ import {
     SheetTitle,
     SheetTrigger,
 } from '@/components/ui/sheet';
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipTrigger,
-} from '@/components/ui/tooltip';
 import { UserMenuContent } from '@/components/user-menu-content';
 import { useCurrentUrl } from '@/hooks/use-current-url';
 import { useInitials } from '@/hooks/use-initials';
-import { cn, toUrl } from '@/lib/utils';
-import { dashboard } from '@/routes';
+import { cn } from '@/lib/utils';
+import { useAuthStore } from '@/store/auth';
 import type { BreadcrumbItem, NavItem } from '@/types';
 
 type Props = {
@@ -42,21 +37,8 @@ type Props = {
 const mainNavItems: NavItem[] = [
     {
         title: 'Dashboard',
-        href: dashboard(),
+        href: '/',
         icon: LayoutGrid,
-    },
-];
-
-const rightNavItems: NavItem[] = [
-    {
-        title: 'Repository',
-        href: 'https://github.com/laravel/react-starter-kit',
-        icon: Folder,
-    },
-    {
-        title: 'Documentation',
-        href: 'https://laravel.com/docs/starter-kits#react',
-        icon: BookOpen,
     },
 ];
 
@@ -64,8 +46,7 @@ const activeItemStyles =
     'text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100';
 
 export function AppHeader({ breadcrumbs = [] }: Props) {
-    const page = usePage();
-    const { auth } = page.props;
+    const user = useAuthStore((state) => state.user);
     const getInitials = useInitials();
     const { isCurrentUrl, whenCurrentUrl } = useCurrentUrl();
 
@@ -96,49 +77,26 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                                     <AppLogoIcon className="h-6 w-6 fill-current text-black dark:text-white" />
                                 </SheetHeader>
                                 <div className="flex h-full flex-1 flex-col space-y-4 p-4">
-                                    <div className="flex h-full flex-col justify-between text-sm">
-                                        <div className="flex flex-col space-y-4">
-                                            {mainNavItems.map((item) => (
-                                                <Link
-                                                    key={item.title}
-                                                    href={item.href}
-                                                    className="flex items-center space-x-2 font-medium"
-                                                >
-                                                    {item.icon && (
-                                                        <item.icon className="h-5 w-5" />
-                                                    )}
-                                                    <span>{item.title}</span>
-                                                </Link>
-                                            ))}
-                                        </div>
-
-                                        <div className="flex flex-col space-y-4">
-                                            {rightNavItems.map((item) => (
-                                                <a
-                                                    key={item.title}
-                                                    href={toUrl(item.href)}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="flex items-center space-x-2 font-medium"
-                                                >
-                                                    {item.icon && (
-                                                        <item.icon className="h-5 w-5" />
-                                                    )}
-                                                    <span>{item.title}</span>
-                                                </a>
-                                            ))}
-                                        </div>
+                                    <div className="flex flex-col space-y-4 text-sm">
+                                        {mainNavItems.map((item) => (
+                                            <Link
+                                                key={item.title}
+                                                to={item.href}
+                                                className="flex items-center space-x-2 font-medium"
+                                            >
+                                                {item.icon && (
+                                                    <item.icon className="h-5 w-5" />
+                                                )}
+                                                <span>{item.title}</span>
+                                            </Link>
+                                        ))}
                                     </div>
                                 </div>
                             </SheetContent>
                         </Sheet>
                     </div>
 
-                    <Link
-                        href={dashboard()}
-                        prefetch
-                        className="flex items-center space-x-2"
-                    >
+                    <Link to="/" className="flex items-center space-x-2">
                         <AppLogo />
                     </Link>
 
@@ -152,7 +110,7 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                                         className="relative flex h-full items-center"
                                     >
                                         <Link
-                                            href={item.href}
+                                            to={item.href}
                                             className={cn(
                                                 navigationMenuTriggerStyle(),
                                                 whenCurrentUrl(
@@ -177,39 +135,6 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                     </div>
 
                     <div className="ml-auto flex items-center space-x-2">
-                        <div className="relative flex items-center space-x-1">
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="group h-9 w-9 cursor-pointer"
-                            >
-                                <Search className="!size-5 opacity-80 group-hover:opacity-100" />
-                            </Button>
-                            <div className="ml-1 hidden gap-1 lg:flex">
-                                {rightNavItems.map((item) => (
-                                    <Tooltip key={item.title}>
-                                        <TooltipTrigger>
-                                            <a
-                                                href={toUrl(item.href)}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="group text-accent-foreground ring-offset-background hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring inline-flex h-9 w-9 items-center justify-center rounded-md bg-transparent p-0 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
-                                            >
-                                                <span className="sr-only">
-                                                    {item.title}
-                                                </span>
-                                                {item.icon && (
-                                                    <item.icon className="size-5 opacity-80 group-hover:opacity-100" />
-                                                )}
-                                            </a>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                            <p>{item.title}</p>
-                                        </TooltipContent>
-                                    </Tooltip>
-                                ))}
-                            </div>
-                        </div>
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
@@ -218,19 +143,17 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                                 >
                                     <Avatar className="size-8 overflow-hidden rounded-full">
                                         <AvatarImage
-                                            src={auth.user?.avatar}
-                                            alt={auth.user?.name}
+                                            src={user?.avatar}
+                                            alt={user?.name}
                                         />
                                         <AvatarFallback className="rounded-lg bg-neutral-200 text-black dark:bg-neutral-700 dark:text-white">
-                                            {getInitials(auth.user?.name ?? '')}
+                                            {getInitials(user?.name ?? '')}
                                         </AvatarFallback>
                                     </Avatar>
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent className="w-56" align="end">
-                                {auth.user && (
-                                    <UserMenuContent user={auth.user} />
-                                )}
+                                {user && <UserMenuContent user={user} />}
                             </DropdownMenuContent>
                         </DropdownMenu>
                     </div>

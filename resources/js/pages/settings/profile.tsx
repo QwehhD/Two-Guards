@@ -1,33 +1,49 @@
-import { Form, Head, usePage } from '@inertiajs/react';
-import { Link } from '@inertiajs/react';
-import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
+import { useState } from 'react';
+import type { FormEvent } from 'react';
 import DeleteUser from '@/components/delete-user';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { edit } from '@/routes/profile';
-import type { Auth } from '@/types';
-import { send } from '@/routes/verification';
+import { api } from '@/services/api';
+import { useAuthStore } from '@/store/auth';
 
-type PageProps = {
-    auth: Auth;
-};
+export default function Profile() {
+    const user = useAuthStore((state) => state.user);
+    const setUser = useAuthStore((state) => state.setUser);
 
-export default function Profile({
-    mustVerifyEmail,
-    status,
-}: {
-    mustVerifyEmail: boolean;
-    status?: string;
-}) {
-    const { auth } = usePage<PageProps>().props;
+    const [name, setName] = useState(user?.name ?? '');
+    const [email, setEmail] = useState(user?.email ?? '');
+    const [processing, setProcessing] = useState(false);
+    const [errors, setErrors] = useState<Record<string, string[]>>({});
+    const [saved, setSaved] = useState(false);
+
+    const handleSubmit = async (event: FormEvent) => {
+        event.preventDefault();
+        setProcessing(true);
+        setErrors({});
+        setSaved(false);
+
+        try {
+            const { data } = await api.patch('/api/profile', { name, email });
+            setUser(data);
+            setSaved(true);
+        } catch (error: any) {
+            if (error.response?.status === 422) {
+                setErrors(error.response.data.errors ?? {});
+            }
+        } finally {
+            setProcessing(false);
+        }
+    };
+
+    const handleResendVerification = async () => {
+        await api.post('/email/verification-notification');
+    };
 
     return (
         <>
-            <Head title="Profile settings" />
-
             <h1 className="sr-only">Profile settings</h1>
 
             <div className="space-y-6">
@@ -37,102 +53,70 @@ export default function Profile({
                     description="Update your name and email address"
                 />
 
-                <Form
-                    {...ProfileController.update.form()}
-                    options={{
-                        preserveScroll: true,
-                    }}
-                    className="space-y-6"
-                >
-                    {({ processing, errors }) => (
-                        <>
-                            <div className="grid gap-2">
-                                <Label htmlFor="name">Name</Label>
+                <form onSubmit={handleSubmit} className="space-y-6">
+                    <div className="grid gap-2">
+                        <Label htmlFor="name">Name</Label>
 
-                                <Input
-                                    id="name"
-                                    className="mt-1 block w-full"
-                                    defaultValue={auth.user.name}
-                                    name="name"
-                                    required
-                                    autoComplete="name"
-                                    placeholder="Full name"
-                                />
+                        <Input
+                            id="name"
+                            className="mt-1 block w-full"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            required
+                            autoComplete="name"
+                            placeholder="Full name"
+                        />
 
-                                <InputError
-                                    className="mt-2"
-                                    message={errors.name}
-                                />
-                            </div>
+                        <InputError className="mt-2" message={errors.name?.[0]} />
+                    </div>
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="email">Email address</Label>
+                    <div className="grid gap-2">
+                        <Label htmlFor="email">Email address</Label>
 
-                                <Input
-                                    id="email"
-                                    type="email"
-                                    className="mt-1 block w-full"
-                                    defaultValue={auth.user.email}
-                                    name="email"
-                                    required
-                                    autoComplete="username"
-                                    placeholder="Email address"
-                                />
+                        <Input
+                            id="email"
+                            type="email"
+                            className="mt-1 block w-full"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            required
+                            autoComplete="username"
+                            placeholder="Email address"
+                        />
 
-                                <InputError
-                                    className="mt-2"
-                                    message={errors.email}
-                                />
-                            </div>
+                        <InputError className="mt-2" message={errors.email?.[0]} />
+                    </div>
 
-                            {mustVerifyEmail &&
-                                auth.user.email_verified_at === null && (
-                                    <div>
-                                        <p className="text-muted-foreground -mt-4 text-sm">
-                                            Your email address is unverified.{' '}
-                                            <Link
-                                                href={send()}
-                                                as="button"
-                                                className="text-foreground underline decoration-neutral-300 underline-offset-4 transition-colors duration-300 ease-out hover:decoration-current! dark:decoration-neutral-500"
-                                            >
-                                                Click here to re-send the
-                                                verification email.
-                                            </Link>
-                                        </p>
-
-                                        {status ===
-                                            'verification-link-sent' && (
-                                            <div className="mt-2 text-sm font-medium text-green-600">
-                                                A new verification link has been
-                                                sent to your email address.
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                            <div className="flex items-center gap-4">
-                                <Button
-                                    disabled={processing}
-                                    data-test="update-profile-button"
+                    {user && user.email_verified_at === null && (
+                        <div>
+                            <p className="text-muted-foreground -mt-4 text-sm">
+                                Your email address is unverified.{' '}
+                                <button
+                                    type="button"
+                                    onClick={handleResendVerification}
+                                    className="text-foreground underline decoration-neutral-300 underline-offset-4 transition-colors duration-300 ease-out hover:decoration-current! dark:decoration-neutral-500"
                                 >
-                                    Save
-                                </Button>
-                            </div>
-                        </>
+                                    Click here to re-send the verification email.
+                                </button>
+                            </p>
+                        </div>
                     )}
-                </Form>
+
+                    <div className="flex items-center gap-4">
+                        <Button disabled={processing} data-test="update-profile-button">
+                            Save
+                        </Button>
+
+                        {saved && (
+                            <p className="text-sm text-neutral-600 dark:text-neutral-400">
+                                Saved.
+                            </p>
+                        )}
+                    </div>
+                </form>
             </div>
 
             <DeleteUser />
         </>
     );
 }
-
-Profile.layout = {
-    breadcrumbs: [
-        {
-            title: 'Profile settings',
-            href: edit(),
-        },
-    ],
-};

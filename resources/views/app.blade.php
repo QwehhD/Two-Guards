@@ -34,15 +34,12 @@
         <link rel="icon" href="/favicon.svg" type="image/svg+xml">
         <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 
-        @fonts
+        <title>{{ config('app.name', 'Laravel') }}</title>
 
         @viteReactRefresh
-        @vite(['resources/css/app.css', 'resources/js/app.tsx', "resources/js/pages/{$page['component']}.tsx"])
-        <x-inertia::head>
-            <title>{{ config('app.name', 'Laravel') }}</title>
-        </x-inertia::head>
+        @vite(['resources/css/app.css', 'resources/js/main.tsx'])
     </head>
     <body class="font-sans antialiased">
-        <x-inertia::app />
+        <div id="root"></div>
     </body>
 </html>

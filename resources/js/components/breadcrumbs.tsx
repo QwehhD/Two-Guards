@@ -1,5 +1,5 @@
-import { Link } from '@inertiajs/react';
 import { Fragment } from 'react';
+import { Link } from 'react-router-dom';
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -32,7 +32,7 @@ export function Breadcrumbs({
                                             </BreadcrumbPage>
                                         ) : (
                                             <BreadcrumbLink asChild>
-                                                <Link href={item.href}>
+                                                <Link to={item.href}>
                                                     {item.title}
                                                 </Link>
                                             </BreadcrumbLink>

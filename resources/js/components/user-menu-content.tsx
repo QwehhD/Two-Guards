@@ -1,5 +1,6 @@
-import { Link, router } from '@inertiajs/react';
 import { LogOut, Settings } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import {
     DropdownMenuGroup,
     DropdownMenuItem,
@@ -7,9 +8,7 @@ import {
     DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { UserInfo } from '@/components/user-info';
-import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
-import { logout } from '@/routes';
-import { edit } from '@/routes/profile';
+import { useAuthStore } from '@/store/auth';
 import type { User } from '@/types';
 
 type Props = {
@@ -17,11 +16,12 @@ type Props = {
 };
 
 export function UserMenuContent({ user }: Props) {
-    const cleanup = useMobileNavigation();
+    const navigate = useNavigate();
+    const logout = useAuthStore((state) => state.logout);
 
-    const handleLogout = () => {
-        cleanup();
-        router.flushAll();
+    const handleLogout = async () => {
+        await logout();
+        navigate('/login');
     };
 
     return (
@@ -34,29 +34,23 @@ export function UserMenuContent({ user }: Props) {
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
                 <DropdownMenuItem asChild>
-                    <Link
-                        className="block w-full cursor-pointer"
-                        href={edit()}
-                        prefetch
-                        onClick={cleanup}
-                    >
+                    <Link className="block w-full cursor-pointer" to="/settings/profile">
                         <Settings className="mr-2" />
                         Settings
                     </Link>
                 </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-                <Link
-                    className="block w-full cursor-pointer"
-                    href={logout()}
-                    as="button"
-                    onClick={handleLogout}
-                    data-test="logout-button"
-                >
-                    <LogOut className="mr-2" />
-                    Log out
-                </Link>
+            <DropdownMenuItem
+                className="cursor-pointer"
+                data-test="logout-button"
+                onSelect={(event) => {
+                    event.preventDefault();
+                    void handleLogout();
+                }}
+            >
+                <LogOut className="mr-2" />
+                Log out
             </DropdownMenuItem>
         </>
     );

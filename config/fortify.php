@@ -131,7 +131,7 @@ return [
     |
     */
 
-    'views' => true,
+    'views' => false,
 
     /*
     |--------------------------------------------------------------------------
@@ -164,14 +164,9 @@ return [
         Features::registration(),
         Features::resetPasswords(),
         Features::emailVerification(),
-        Features::twoFactorAuthentication([
-            'confirm' => true,
-            'confirmPassword' => true,
-            // 'window' => 0
-        ]),
-        Features::passkeys([
-            'confirmPassword' => true,
-        ]),
+        // 2FA & passkeys disabled for now — SPA migration is simplified to
+        // email+password auth first; these can be re-added as a follow-up
+        // task once the React SPA + API auth flow is stable.
     ],
 
 ];

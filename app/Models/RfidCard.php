@@ -6,6 +6,7 @@ use App\Enums\RfidCardStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class RfidCard extends Model
 {
@@ -29,5 +30,10 @@ class RfidCard extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function accessLogs(): HasMany
+    {
+        return $this->hasMany(AccessLog::class);
     }
 }

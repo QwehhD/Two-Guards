@@ -56,4 +56,9 @@ class User extends Authenticatable implements PasskeyUser
     {
         return $this->hasMany(RfidCard::class, 'created_by');
     }
+
+    public function processedAccessLogs(): HasMany
+    {
+        return $this->hasMany(AccessLog::class, 'processed_by');
+    }
 }

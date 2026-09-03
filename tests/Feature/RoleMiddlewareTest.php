@@ -34,20 +34,18 @@ class RoleMiddlewareTest extends TestCase
     {
         $admin = User::factory()->create(['role' => UserRole::Admin]);
 
-        $response = $this->actingAs($admin)->getJson('/api/test/any-role');
+        $response = $this->actingAs($admin)->getJson('/api/access-logs');
 
         $response->assertOk();
-        $response->assertJson(['message' => 'Halo semua role']);
     }
 
     public function test_karyawan_can_access_any_role_route(): void
     {
         $karyawan = User::factory()->create(['role' => UserRole::Karyawan]);
 
-        $response = $this->actingAs($karyawan)->getJson('/api/test/any-role');
+        $response = $this->actingAs($karyawan)->getJson('/api/access-logs');
 
         $response->assertOk();
-        $response->assertJson(['message' => 'Halo semua role']);
     }
 
     public function test_unauthenticated_user_is_rejected_from_admin_only_route(): void
@@ -59,7 +57,7 @@ class RoleMiddlewareTest extends TestCase
 
     public function test_unauthenticated_user_is_rejected_from_any_role_route(): void
     {
-        $response = $this->getJson('/api/test/any-role');
+        $response = $this->getJson('/api/access-logs');
 
         $response->assertUnauthorized();
     }

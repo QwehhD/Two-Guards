@@ -5,10 +5,13 @@ namespace App\Http\Controllers\Api;
 use App\Enums\AccessLogMode;
 use App\Enums\AccessLogStatus;
 use App\Http\Controllers\Controller;
+use App\Http\Resources\AccessLogResource;
 use App\Models\AccessLog;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Validation\Rule;
 
 class AccessLogController extends Controller
 {
@@ -16,14 +19,42 @@ class AccessLogController extends Controller
 
     /**
      * List access history. Both admin and karyawan may view this.
+     *
+     * Supports filtering via query params: status, mode, device_id,
+     * date_from, date_to (both applied against scanned_at), and search
+     * (matches the card's owner_name or the raw scanned_uid).
      */
-    public function index(): JsonResponse
+    public function index(Request $request): AnonymousResourceCollection
     {
         $this->authorize('viewAny', AccessLog::class);
 
-        return response()->json(
-            AccessLog::query()->latest('scanned_at')->get()
-        );
+        $validated = $request->validate([
+            'status' => ['nullable', Rule::enum(AccessLogStatus::class)],
+            'mode' => ['nullable', Rule::enum(AccessLogMode::class)],
+            'device_id' => ['nullable', 'integer'],
+            'date_from' => ['nullable', 'date'],
+            'date_to' => ['nullable', 'date'],
+            'search' => ['nullable', 'string', 'max:255'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $logs = AccessLog::query()
+            ->with(['rfidCard', 'device', 'processor'])
+            ->when($validated['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
+            ->when($validated['mode'] ?? null, fn ($query, $mode) => $query->where('mode', $mode))
+            ->when($validated['device_id'] ?? null, fn ($query, $deviceId) => $query->where('device_id', $deviceId))
+            ->when($validated['date_from'] ?? null, fn ($query, $date) => $query->whereDate('scanned_at', '>=', $date))
+            ->when($validated['date_to'] ?? null, fn ($query, $date) => $query->whereDate('scanned_at', '<=', $date))
+            ->when($validated['search'] ?? null, fn ($query, $search) => $query->where(
+                fn ($query) => $query
+                    ->where('scanned_uid', 'like', "%{$search}%")
+                    ->orWhereHas('rfidCard', fn ($query) => $query->where('owner_name', 'like', "%{$search}%"))
+            ))
+            ->latest('scanned_at')
+            ->paginate($validated['per_page'] ?? 15)
+            ->withQueryString();
+
+        return AccessLogResource::collection($logs);
     }
 
     /**

@@ -4,6 +4,27 @@
     "description": "TEMPORARY collection to manually verify EnsureUserHasRole middleware and the dummy /test/* routes before real controllers exist (Tahap 3 & 4). Uses Fortify session login + Sanctum SPA cookie auth.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Laravel/Sanctum expect the XSRF-TOKEN cookie to be echoed back as the",
+          "// X-XSRF-TOKEN header (URL-decoded). Postman stores the cookie after hitting",
+          "// /sanctum/csrf-cookie but does NOT do this automatically like axios does,",
+          "// so we do it here for every request in this collection.",
+          "const xsrfToken = pm.cookies.get('XSRF-TOKEN');",
+          "if (xsrfToken) {",
+          "    pm.request.headers.upsert({",
+          "        key: 'X-XSRF-TOKEN',",
+          "        value: decodeURIComponent(xsrfToken)",
+          "    });",
+          "}"
+        ]
+      }
+    }
+  ],
   "variable": [
     {
       "key": "base_url",
@@ -68,7 +89,7 @@
           "host": ["{{base_url}}"],
           "path": ["login"]
         },
-        "description": "Postman auto-attaches the XSRF-TOKEN cookie as the X-XSRF-TOKEN header if 'Automatically add CSRF token from cookie' interceptor/cookie handling is enabled for the domain. If login fails with 419, manually copy the XSRF-TOKEN cookie value into an X-XSRF-TOKEN header (URL-decoded)."
+        "description": "The collection's pre-request script reads the XSRF-TOKEN cookie (set by step 1) and adds it as the X-XSRF-TOKEN header automatically. Make sure step 1 ran first in the same Postman cookie jar/domain."
       }
     },
     {

@@ -1,0 +1,155 @@
+{
+  "info": {
+    "name": "ParkAutomation - Role Middleware Verification",
+    "description": "TEMPORARY collection to manually verify EnsureUserHasRole middleware and the dummy /test/* routes before real controllers exist (Tahap 3 & 4). Uses Fortify session login + Sanctum SPA cookie auth.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000"
+    },
+    {
+      "key": "admin_email",
+      "value": "admin@example.com"
+    },
+    {
+      "key": "admin_password",
+      "value": "password"
+    },
+    {
+      "key": "karyawan_email",
+      "value": "karyawan@example.com"
+    },
+    {
+      "key": "karyawan_password",
+      "value": "password"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Get CSRF Cookie",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/sanctum/csrf-cookie",
+          "host": ["{{base_url}}"],
+          "path": ["sanctum", "csrf-cookie"]
+        },
+        "description": "Sets the XSRF-TOKEN cookie. Run this once before logging in, and again if the session expires."
+      }
+    },
+    {
+      "name": "2. Login as Admin",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{admin_email}}\",\n  \"password\": \"{{admin_password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/login",
+          "host": ["{{base_url}}"],
+          "path": ["login"]
+        },
+        "description": "Postman auto-attaches the XSRF-TOKEN cookie as the X-XSRF-TOKEN header if 'Automatically add CSRF token from cookie' interceptor/cookie handling is enabled for the domain. If login fails with 419, manually copy the XSRF-TOKEN cookie value into an X-XSRF-TOKEN header (URL-decoded)."
+      }
+    },
+    {
+      "name": "2b. Login as Karyawan",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{karyawan_email}}\",\n  \"password\": \"{{karyawan_password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/login",
+          "host": ["{{base_url}}"],
+          "path": ["login"]
+        },
+        "description": "Run '3. Logout' first if you were logged in as admin, then run '1. Get CSRF Cookie' again before this."
+      }
+    },
+    {
+      "name": "3. Logout",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/logout",
+          "host": ["{{base_url}}"],
+          "path": ["logout"]
+        },
+        "description": "Clears the session so you can switch users. Run '1. Get CSRF Cookie' again afterwards."
+      }
+    },
+    {
+      "name": "4. GET /api/test/admin-only",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/test/admin-only",
+          "host": ["{{base_url}}"],
+          "path": ["api", "test", "admin-only"]
+        },
+        "description": "Expected: 200 {\"message\": \"Halo admin\"} when logged in as admin.\n403 {\"message\": \"Forbidden\"} when logged in as karyawan.\n401 when not authenticated."
+      }
+    },
+    {
+      "name": "5. GET /api/test/any-role",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/test/any-role",
+          "host": ["{{base_url}}"],
+          "path": ["api", "test", "any-role"]
+        },
+        "description": "Expected: 200 {\"message\": \"Halo semua role\"} for both admin and karyawan.\n401 when not authenticated."
+      }
+    }
+  ]
+}

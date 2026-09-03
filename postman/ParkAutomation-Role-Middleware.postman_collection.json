@@ -4,28 +4,11 @@
     "description": "TEMPORARY collection to manually verify EnsureUserHasRole middleware and the dummy /test/* routes before real controllers exist (Tahap 3 & 4). Uses Fortify session login + Sanctum SPA cookie auth.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
-  "event": [
-    {
-      "listen": "prerequest",
-      "script": {
-        "type": "text/javascript",
-        "exec": [
-          "// Laravel/Sanctum expect the XSRF-TOKEN cookie to be echoed back as the",
-          "// X-XSRF-TOKEN header (URL-decoded). Postman stores the cookie after hitting",
-          "// /sanctum/csrf-cookie but does NOT do this automatically like axios does,",
-          "// so we do it here for every request in this collection.",
-          "const xsrfToken = pm.cookies.get('XSRF-TOKEN');",
-          "if (xsrfToken) {",
-          "    pm.request.headers.upsert({",
-          "        key: 'X-XSRF-TOKEN',",
-          "        value: decodeURIComponent(xsrfToken)",
-          "    });",
-          "}"
-        ]
-      }
-    }
-  ],
   "variable": [
+    {
+      "key": "xsrf_token",
+      "value": ""
+    },
     {
       "key": "base_url",
       "value": "http://localhost:8000"
@@ -63,8 +46,28 @@
           "host": ["{{base_url}}"],
           "path": ["sanctum", "csrf-cookie"]
         },
-        "description": "Sets the XSRF-TOKEN cookie. Run this once before logging in, and again if the session expires."
-      }
+        "description": "Sets the XSRF-TOKEN cookie and, via the test script below, saves its decoded value into the {{xsrf_token}} collection variable. Run this once before logging in, and again if the session expires (419 errors)."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Read the cookie AFTER the response arrived (reliable), not in a",
+              "// pre-request script (cookies set by this same call aren't guaranteed",
+              "// to be visible yet at that point in some Postman versions).",
+              "const xsrfCookie = pm.cookies.get('XSRF-TOKEN');",
+              "if (xsrfCookie) {",
+              "    pm.collectionVariables.set('xsrf_token', decodeURIComponent(xsrfCookie));",
+              "    console.log('Saved xsrf_token collection variable.');",
+              "} else {",
+              "    console.warn('XSRF-TOKEN cookie not found in response - check Postman Console.');",
+              "}"
+            ]
+          }
+        }
+      ]
     },
     {
       "name": "2. Login as Admin",
@@ -78,6 +81,10 @@
           {
             "key": "Content-Type",
             "value": "application/json"
+          },
+          {
+            "key": "X-XSRF-TOKEN",
+            "value": "{{xsrf_token}}"
           }
         ],
         "body": {
@@ -89,7 +96,7 @@
           "host": ["{{base_url}}"],
           "path": ["login"]
         },
-        "description": "The collection's pre-request script reads the XSRF-TOKEN cookie (set by step 1) and adds it as the X-XSRF-TOKEN header automatically. Make sure step 1 ran first in the same Postman cookie jar/domain."
+        "description": "Requires step 1 to have run first so {{xsrf_token}} is populated. If this still 419s, open Postman Console (View > Show Postman Console) and check the request's actual X-XSRF-TOKEN header value against the XSRF-TOKEN cookie."
       }
     },
     {
@@ -104,6 +111,10 @@
           {
             "key": "Content-Type",
             "value": "application/json"
+          },
+          {
+            "key": "X-XSRF-TOKEN",
+            "value": "{{xsrf_token}}"
           }
         ],
         "body": {
@@ -126,6 +137,10 @@
           {
             "key": "Accept",
             "value": "application/json"
+          },
+          {
+            "key": "X-XSRF-TOKEN",
+            "value": "{{xsrf_token}}"
           }
         ],
         "url": {

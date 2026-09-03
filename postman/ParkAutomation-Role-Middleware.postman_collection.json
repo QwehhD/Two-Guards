@@ -1,7 +1,7 @@
 {
   "info": {
-    "name": "ParkAutomation - Role Middleware Verification",
-    "description": "TEMPORARY collection to manually verify EnsureUserHasRole middleware and the dummy /test/* routes before real controllers exist (Tahap 3 & 4). Uses Fortify session login + Sanctum SPA cookie auth.",
+    "name": "ParkAutomation - Auth Layer Verification",
+    "description": "Manually verify EnsureUserHasRole middleware and policy-backed authorization across the real Tahap 3 (users, RFID cards) and Tahap 4 (access logs) endpoints. Uses Fortify session login + Sanctum SPA cookie auth.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -32,6 +32,10 @@
     {
       "key": "karyawan_password",
       "value": "password"
+    },
+    {
+      "key": "access_log_id",
+      "value": ""
     }
   ],
   "item": [
@@ -168,7 +172,7 @@
       }
     },
     {
-      "name": "4. GET /api/test/admin-only",
+      "name": "4. GET /api/users (admin-only)",
       "request": {
         "method": "GET",
         "header": [
@@ -182,15 +186,49 @@
           }
         ],
         "url": {
-          "raw": "{{base_url}}/api/test/admin-only",
+          "raw": "{{base_url}}/api/users",
           "host": ["{{base_url}}"],
-          "path": ["api", "test", "admin-only"]
+          "path": ["api", "users"]
         },
-        "description": "Expected: 200 {\"message\": \"Halo admin\"} when logged in as admin.\n403 {\"message\": \"Forbidden\"} when logged in as karyawan.\n401 when not authenticated.\n\nThe Origin header is required so Sanctum recognizes this as a stateful (cookie-based) request per SANCTUM_STATEFUL_DOMAINS - without it, auth:sanctum ignores the session cookie entirely and returns 401 Unauthenticated even when logged in."
+        "description": "Expected: 200 with a JSON array of users when logged in as admin.\n403 {\"message\": \"Forbidden\"} when logged in as karyawan.\n401 when not authenticated.\n\nThe Origin header is required so Sanctum recognizes this as a stateful (cookie-based) request per SANCTUM_STATEFUL_DOMAINS - without it, auth:sanctum ignores the session cookie entirely and returns 401 Unauthenticated even when logged in."
       }
     },
     {
-      "name": "5. GET /api/test/any-role",
+      "name": "5. POST /api/users (create karyawan, admin-only)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-XSRF-TOKEN",
+            "value": "{{xsrf_token}}"
+          },
+          {
+            "key": "Origin",
+            "value": "{{stateful_origin}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Postman Test User\",\n  \"email\": \"postman-test@example.com\",\n  \"password\": \"password123\",\n  \"password_confirmation\": \"password123\",\n  \"role\": \"karyawan\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/users",
+          "host": ["{{base_url}}"],
+          "path": ["api", "users"]
+        },
+        "description": "Expected: 201 with the created user when logged in as admin.\n403 {\"message\": \"Forbidden\"} when logged in as karyawan."
+      }
+    },
+    {
+      "name": "6. GET /api/rfid-cards (admin-only)",
       "request": {
         "method": "GET",
         "header": [
@@ -204,11 +242,119 @@
           }
         ],
         "url": {
-          "raw": "{{base_url}}/api/test/any-role",
+          "raw": "{{base_url}}/api/rfid-cards",
           "host": ["{{base_url}}"],
-          "path": ["api", "test", "any-role"]
+          "path": ["api", "rfid-cards"]
         },
-        "description": "Expected: 200 {\"message\": \"Halo semua role\"} for both admin and karyawan.\n401 when not authenticated."
+        "description": "Expected: 200 with a JSON array of RFID cards when logged in as admin.\n403 {\"message\": \"Forbidden\"} when logged in as karyawan (RfidCardPolicy denies karyawan entirely, not just write access)."
+      }
+    },
+    {
+      "name": "7. POST /api/rfid-cards (admin-only)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-XSRF-TOKEN",
+            "value": "{{xsrf_token}}"
+          },
+          {
+            "key": "Origin",
+            "value": "{{stateful_origin}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"uid\": \"POSTMAN0001\",\n  \"owner_name\": \"Postman Test Card\",\n  \"status\": \"active\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/rfid-cards",
+          "host": ["{{base_url}}"],
+          "path": ["api", "rfid-cards"]
+        },
+        "description": "Expected: 201 with the created card when logged in as admin.\n403 {\"message\": \"Forbidden\"} when logged in as karyawan."
+      }
+    },
+    {
+      "name": "8. GET /api/access-logs (any authenticated role)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Origin",
+            "value": "{{stateful_origin}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/access-logs",
+          "host": ["{{base_url}}"],
+          "path": ["api", "access-logs"]
+        },
+        "description": "Expected: 200 with a JSON array of access log history for both admin and karyawan.\n401 when not authenticated.\n\nCopy an `id` from the response into the {{access_log_id}} collection variable to try step 9/10 - it needs a log with mode \"manual\" and status \"pending\" (create one via tinker/seeder, or scan a device in manual mode) or those requests will return 422."
+      }
+    },
+    {
+      "name": "9. POST /api/access-logs/{{access_log_id}}/approve",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-XSRF-TOKEN",
+            "value": "{{xsrf_token}}"
+          },
+          {
+            "key": "Origin",
+            "value": "{{stateful_origin}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/access-logs/{{access_log_id}}/approve",
+          "host": ["{{base_url}}"],
+          "path": ["api", "access-logs", "{{access_log_id}}", "approve"]
+        },
+        "description": "Expected: 200 with the updated log (status \"approved\") for both admin and karyawan, provided the log is mode \"manual\" and status \"pending\".\n422 if the log isn't manual-mode or was already processed.\n401 when not authenticated."
+      }
+    },
+    {
+      "name": "10. POST /api/access-logs/{{access_log_id}}/reject",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-XSRF-TOKEN",
+            "value": "{{xsrf_token}}"
+          },
+          {
+            "key": "Origin",
+            "value": "{{stateful_origin}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/access-logs/{{access_log_id}}/reject",
+          "host": ["{{base_url}}"],
+          "path": ["api", "access-logs", "{{access_log_id}}", "reject"]
+        },
+        "description": "Expected: 200 with the updated log (status \"denied\") for both admin and karyawan, provided the log is mode \"manual\" and status \"pending\".\n422 if the log isn't manual-mode or was already processed.\n401 when not authenticated."
       }
     }
   ]

@@ -14,6 +14,10 @@
       "value": "http://localhost:8000"
     },
     {
+      "key": "stateful_origin",
+      "value": "http://localhost:5173"
+    },
+    {
       "key": "admin_email",
       "value": "admin@example.com"
     },
@@ -85,6 +89,10 @@
           {
             "key": "X-XSRF-TOKEN",
             "value": "{{xsrf_token}}"
+          },
+          {
+            "key": "Origin",
+            "value": "{{stateful_origin}}"
           }
         ],
         "body": {
@@ -115,6 +123,10 @@
           {
             "key": "X-XSRF-TOKEN",
             "value": "{{xsrf_token}}"
+          },
+          {
+            "key": "Origin",
+            "value": "{{stateful_origin}}"
           }
         ],
         "body": {
@@ -141,6 +153,10 @@
           {
             "key": "X-XSRF-TOKEN",
             "value": "{{xsrf_token}}"
+          },
+          {
+            "key": "Origin",
+            "value": "{{stateful_origin}}"
           }
         ],
         "url": {
@@ -159,6 +175,10 @@
           {
             "key": "Accept",
             "value": "application/json"
+          },
+          {
+            "key": "Origin",
+            "value": "{{stateful_origin}}"
           }
         ],
         "url": {
@@ -166,7 +186,7 @@
           "host": ["{{base_url}}"],
           "path": ["api", "test", "admin-only"]
         },
-        "description": "Expected: 200 {\"message\": \"Halo admin\"} when logged in as admin.\n403 {\"message\": \"Forbidden\"} when logged in as karyawan.\n401 when not authenticated."
+        "description": "Expected: 200 {\"message\": \"Halo admin\"} when logged in as admin.\n403 {\"message\": \"Forbidden\"} when logged in as karyawan.\n401 when not authenticated.\n\nThe Origin header is required so Sanctum recognizes this as a stateful (cookie-based) request per SANCTUM_STATEFUL_DOMAINS - without it, auth:sanctum ignores the session cookie entirely and returns 401 Unauthenticated even when logged in."
       }
     },
     {
@@ -177,6 +197,10 @@
           {
             "key": "Accept",
             "value": "application/json"
+          },
+          {
+            "key": "Origin",
+            "value": "{{stateful_origin}}"
           }
         ],
         "url": {

@@ -4,6 +4,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import AppLayout from '@/layouts/app-layout';
 import AuthLayout from '@/layouts/auth-layout';
 import SettingsLayout from '@/layouts/settings/layout';
+import AccessLogs from '@/pages/access-logs';
 import ForgotPassword from '@/pages/auth/forgot-password';
 import Login from '@/pages/auth/login';
 import Register from '@/pages/auth/register';
@@ -123,6 +124,16 @@ export default function App() {
                     <ProtectedRoute>
                         <AppLayout breadcrumbs={[{ title: 'Dashboard', href: '/' }]}>
                             <Dashboard />
+                        </AppLayout>
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/access-logs"
+                element={
+                    <ProtectedRoute>
+                        <AppLayout breadcrumbs={[{ title: 'Access Logs', href: '/access-logs' }]}>
+                            <AccessLogs />
                         </AppLayout>
                     </ProtectedRoute>
                 }

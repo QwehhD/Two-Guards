@@ -36,4 +36,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('access-logs', [AccessLogController::class, 'index']);
     Route::post('access-logs/{access_log}/approve', [AccessLogController::class, 'approve']);
     Route::post('access-logs/{access_log}/reject', [AccessLogController::class, 'reject']);
+
+    // DEVELOPMENT-ONLY (Tahap 6): simulates a hardware scan so the manual
+    // approval flow can be tested before the ESP32/MQTT listener exists
+    // (Tahap 9). The controller itself 404s outside local/testing envs.
+    Route::post('access-logs/simulate-scan', [AccessLogController::class, 'simulateScan']);
 });

@@ -188,6 +188,12 @@ class AccessLogTest extends TestCase
         $response = $this->actingAs($admin)->postJson("/api/access-logs/{$log->id}/approve");
 
         $response->assertOk();
+        // Response uses AccessLogResource, not a raw model dump.
+        $response->assertJsonFragment([
+            'id' => $log->id,
+            'status' => AccessLogStatus::Approved->value,
+            'processed_by' => ['id' => $admin->id, 'name' => $admin->name],
+        ]);
         $this->assertDatabaseHas('access_logs', [
             'id' => $log->id,
             'status' => AccessLogStatus::Approved->value,
@@ -203,6 +209,11 @@ class AccessLogTest extends TestCase
         $response = $this->actingAs($karyawan)->postJson("/api/access-logs/{$log->id}/reject");
 
         $response->assertOk();
+        $response->assertJsonFragment([
+            'id' => $log->id,
+            'status' => AccessLogStatus::Denied->value,
+            'processed_by' => ['id' => $karyawan->id, 'name' => $karyawan->name],
+        ]);
         $this->assertDatabaseHas('access_logs', [
             'id' => $log->id,
             'status' => AccessLogStatus::Denied->value,
@@ -230,6 +241,20 @@ class AccessLogTest extends TestCase
         $response = $this->actingAs($admin)->postJson("/api/access-logs/{$log->id}/approve");
 
         $response->assertStatus(422);
+        $response->assertJsonFragment(['message' => 'This scan has already been processed.']);
+    }
+
+    public function test_rejecting_an_already_processed_scan_is_rejected_with_422(): void
+    {
+        $admin = User::factory()->create(['role' => UserRole::Admin]);
+        $log = AccessLog::factory()->pending()->create();
+        $log->update(['status' => AccessLogStatus::Denied, 'processed_by' => $admin->id]);
+
+        $response = $this->actingAs($admin)->postJson("/api/access-logs/{$log->id}/reject");
+
+        $response->assertStatus(422);
+        $response->assertJsonFragment(['message' => 'This scan has already been processed.']);
+        $this->assertDatabaseHas('access_logs', ['id' => $log->id, 'status' => AccessLogStatus::Denied->value]);
     }
 
     public function test_unauthenticated_user_cannot_view_history_or_process_scans(): void

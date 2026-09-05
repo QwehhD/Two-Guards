@@ -128,6 +128,6 @@ class AccessLogController extends Controller
             'processed_at' => now(),
         ]);
 
-        return response()->json($accessLog);
+        return response()->json(new AccessLogResource($accessLog->load(['device', 'rfidCard', 'processor'])));
     }
 }

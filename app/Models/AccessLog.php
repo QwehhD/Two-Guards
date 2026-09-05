@@ -13,6 +13,15 @@ class AccessLog extends Model
     /** @use HasFactory<\Database\Factories\AccessLogFactory> */
     use HasFactory;
 
+    /**
+     * How long a manual-mode scan may sit pending before it's considered
+     * expired. Used by both the expire-pending Artisan command (periodic
+     * housekeeping) and the approve/reject endpoints (self-healing check
+     * at the moment of the request, so correctness never depends on how
+     * recently the housekeeping command last ran).
+     */
+    public const PENDING_TIMEOUT_SECONDS = 30;
+
     protected $fillable = [
         'device_id',
         'rfid_card_id',

@@ -5,12 +5,16 @@ namespace App\Http\Controllers\Api;
 use App\Enums\AccessLogMode;
 use App\Enums\AccessLogStatus;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AccessLogs\SimulateScanRequest;
 use App\Http\Resources\AccessLogResource;
 use App\Models\AccessLog;
+use App\Models\Device;
+use App\Services\AccessDecisionService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class AccessLogController extends Controller
@@ -55,6 +59,33 @@ class AccessLogController extends Controller
             ->withQueryString();
 
         return AccessLogResource::collection($logs);
+    }
+
+    /**
+     * ============================================================
+     *  DEVELOPMENT-ONLY ENDPOINT — NOT PART OF THE PRODUCTION FLOW
+     * ============================================================
+     * Simulates a hardware card scan so the manual-approval flow (Tahap 6)
+     * can be tested end-to-end before the real ESP32/MQTT listener exists
+     * (Tahap 9). It calls the exact same AccessDecisionService the MQTT
+     * listener will call, so there is no separate/duplicated decision
+     * logic to keep in sync — only the trigger differs (HTTP vs. MQTT).
+     *
+     * Remove or hide this endpoint (and the button that calls it on the
+     * frontend) once real hardware is wired up in Tahap 9.
+     */
+    public function simulateScan(SimulateScanRequest $request, AccessDecisionService $decisions): JsonResponse
+    {
+        abort_unless(app()->environment(['local', 'testing']), 404);
+
+        $device = Device::findOrFail($request->validated('device_id'));
+
+        // No UID given -> simulate a scan from an unknown/unregistered card.
+        $uid = $request->validated('uid') ?: strtoupper(Str::random(8));
+
+        $log = $decisions->decide($device, $uid);
+
+        return response()->json(new AccessLogResource($log->load(['device', 'rfidCard'])), 201);
     }
 
     /**

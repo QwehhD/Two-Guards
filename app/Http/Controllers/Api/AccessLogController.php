@@ -14,6 +14,7 @@ use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -108,26 +109,51 @@ class AccessLogController extends Controller
         return $this->resolve($request, $accessLog, AccessLogStatus::Denied);
     }
 
+    /**
+     * Runs the check-then-update inside a row lock so a request racing
+     * against the expire-pending command (or another request) can never
+     * both observe "still pending" and both write conflicting outcomes
+     * to the same row: whichever transaction gets the row lock first
+     * resolves the log, and the other sees the already-updated state.
+     */
     private function resolve(Request $request, AccessLog $accessLog, AccessLogStatus $status): JsonResponse
     {
-        if ($accessLog->mode !== AccessLogMode::Manual) {
-            return response()->json([
-                'message' => 'Only manual-mode scans can be approved or rejected.',
-            ], 422);
+        $result = DB::transaction(function () use ($accessLog, $status, $request) {
+            $locked = AccessLog::query()->whereKey($accessLog->id)->lockForUpdate()->firstOrFail();
+
+            if ($locked->mode !== AccessLogMode::Manual) {
+                return ['error' => 'Only manual-mode scans can be approved or rejected.'];
+            }
+
+            if ($locked->status !== AccessLogStatus::Pending) {
+                return ['error' => 'This scan has already been processed.'];
+            }
+
+            // Self-heal: don't rely solely on the periodic expire-pending
+            // command to catch this — a scan that's timed out must be
+            // rejected the instant anyone tries to act on it.
+            if ($locked->scanned_at->addSeconds(AccessLog::PENDING_TIMEOUT_SECONDS)->isPast()) {
+                $locked->update([
+                    'status' => AccessLogStatus::Expired,
+                    'processed_at' => now(),
+                ]);
+
+                return ['error' => 'This scan has expired and can no longer be approved or rejected.'];
+            }
+
+            $locked->update([
+                'status' => $status,
+                'processed_by' => $request->user()->id,
+                'processed_at' => now(),
+            ]);
+
+            return ['log' => $locked];
+        });
+
+        if (isset($result['error'])) {
+            return response()->json(['message' => $result['error']], 422);
         }
 
-        if ($accessLog->status !== AccessLogStatus::Pending) {
-            return response()->json([
-                'message' => 'This scan has already been processed.',
-            ], 422);
-        }
-
-        $accessLog->update([
-            'status' => $status,
-            'processed_by' => $request->user()->id,
-            'processed_at' => now(),
-        ]);
-
-        return response()->json(new AccessLogResource($accessLog->load(['device', 'rfidCard', 'processor'])));
+        return response()->json(new AccessLogResource($result['log']->load(['device', 'rfidCard', 'processor'])));
     }
 }

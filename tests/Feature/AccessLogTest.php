@@ -257,6 +257,41 @@ class AccessLogTest extends TestCase
         $this->assertDatabaseHas('access_logs', ['id' => $log->id, 'status' => AccessLogStatus::Denied->value]);
     }
 
+    public function test_approving_a_scan_past_the_pending_timeout_self_heals_to_expired(): void
+    {
+        $admin = User::factory()->create(['role' => UserRole::Admin]);
+        $log = AccessLog::factory()->pending()->create([
+            'scanned_at' => now()->subSeconds(AccessLog::PENDING_TIMEOUT_SECONDS + 5),
+        ]);
+
+        $response = $this->actingAs($admin)->postJson("/api/access-logs/{$log->id}/approve");
+
+        $response->assertStatus(422);
+        $response->assertJsonFragment(['message' => 'This scan has expired and can no longer be approved or rejected.']);
+        $this->assertDatabaseHas('access_logs', [
+            'id' => $log->id,
+            'status' => AccessLogStatus::Expired->value,
+            'processed_by' => null,
+        ]);
+    }
+
+    public function test_rejecting_a_scan_within_the_pending_timeout_still_succeeds(): void
+    {
+        $admin = User::factory()->create(['role' => UserRole::Admin]);
+        $log = AccessLog::factory()->pending()->create([
+            'scanned_at' => now()->subSeconds(AccessLog::PENDING_TIMEOUT_SECONDS - 5),
+        ]);
+
+        $response = $this->actingAs($admin)->postJson("/api/access-logs/{$log->id}/reject");
+
+        $response->assertOk();
+        $this->assertDatabaseHas('access_logs', [
+            'id' => $log->id,
+            'status' => AccessLogStatus::Denied->value,
+            'processed_by' => $admin->id,
+        ]);
+    }
+
     public function test_unauthenticated_user_cannot_view_history_or_process_scans(): void
     {
         $log = AccessLog::factory()->pending()->create();

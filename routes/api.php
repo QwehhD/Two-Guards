@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AccessLogController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\DeviceController;
 use App\Http\Controllers\Api\PasswordController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\RfidCardController;
@@ -41,4 +42,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // approval flow can be tested before the ESP32/MQTT listener exists
     // (Tahap 9). The controller itself 404s outside local/testing envs.
     Route::post('access-logs/simulate-scan', [AccessLogController::class, 'simulateScan']);
+
+    // Minimal device listing (Tahap 6), just enough to populate a picker
+    // (e.g. the simulate-scan dev tool). Full device management/CRUD is a
+    // separate, later concern.
+    Route::get('devices', [DeviceController::class, 'index']);
 });

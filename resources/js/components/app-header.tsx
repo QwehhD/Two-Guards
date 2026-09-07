@@ -1,4 +1,4 @@
-import { History, LayoutGrid, Menu } from 'lucide-react';
+import { History, LayoutGrid, Menu, ShieldCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import AppLogo from '@/components/app-logo';
 import AppLogoIcon from '@/components/app-logo-icon';
@@ -44,6 +44,11 @@ const mainNavItems: NavItem[] = [
         title: 'Access Logs',
         href: '/access-logs',
         icon: History,
+    },
+    {
+        title: 'Persetujuan',
+        href: '/approvals',
+        icon: ShieldCheck,
     },
 ];
 

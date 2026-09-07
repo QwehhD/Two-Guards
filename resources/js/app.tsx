@@ -5,6 +5,7 @@ import AppLayout from '@/layouts/app-layout';
 import AuthLayout from '@/layouts/auth-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 import AccessLogs from '@/pages/access-logs';
+import Approvals from '@/pages/approvals';
 import ForgotPassword from '@/pages/auth/forgot-password';
 import Login from '@/pages/auth/login';
 import Register from '@/pages/auth/register';
@@ -134,6 +135,16 @@ export default function App() {
                     <ProtectedRoute>
                         <AppLayout breadcrumbs={[{ title: 'Access Logs', href: '/access-logs' }]}>
                             <AccessLogs />
+                        </AppLayout>
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/approvals"
+                element={
+                    <ProtectedRoute>
+                        <AppLayout breadcrumbs={[{ title: 'Persetujuan Manual', href: '/approvals' }]}>
+                            <Approvals />
                         </AppLayout>
                     </ProtectedRoute>
                 }

@@ -37,7 +37,7 @@ type Props = {
 const mainNavItems: NavItem[] = [
     {
         title: 'Dashboard',
-        href: '/',
+        href: '/dashboard',
         icon: LayoutGrid,
     },
     {
@@ -106,7 +106,7 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                         </Sheet>
                     </div>
 
-                    <Link to="/" className="flex items-center space-x-2">
+                    <Link to="/dashboard" className="flex items-center space-x-2">
                         <AppLogo />
                     </Link>
 

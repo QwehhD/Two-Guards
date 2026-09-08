@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
 import { DeviceStatusCard } from '@/components/landing/device-status-card';
+import { RecentActivityList } from '@/components/landing/recent-activity-list';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
-import { fetchPortalStatus } from '@/services/publicPortalService';
-import type { PublicDeviceStatus } from '@/types';
+import {
+    fetchPortalStatus,
+    fetchRecentActivity,
+} from '@/services/publicPortalService';
+import type { PublicAccessLog, PublicDeviceStatus } from '@/types';
 
 /**
  * Public landing page (Tahap 7) — the only page in the app reachable
@@ -11,25 +15,29 @@ import type { PublicDeviceStatus } from '@/types';
  * ProtectedRoute/GuestOnlyRoute wrapper, so it stays visible to signed-out
  * visitors and signed-in staff alike.
  *
- * Fetches the device snapshot once on mount for now; recurring polling
- * (clearly marked as a Tahap-8-WebSocket stand-in) and the recent-activity
- * section land in follow-up commits.
+ * Fetches both the device snapshot and the recent-activity feed once on
+ * mount for now; recurring polling (clearly marked as a Tahap-8-WebSocket
+ * stand-in) lands in the next commit.
  */
 export default function Landing() {
     const [devices, setDevices] = useState<PublicDeviceStatus[]>([]);
+    const [activity, setActivity] = useState<PublicAccessLog[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         let cancelled = false;
 
-        fetchPortalStatus()
-            .then((data) => {
-                if (!cancelled) setDevices(data);
+        Promise.all([fetchPortalStatus(), fetchRecentActivity()])
+            .then(([devicesData, activityData]) => {
+                if (!cancelled) {
+                    setDevices(devicesData);
+                    setActivity(activityData);
+                }
             })
             .catch(() => {
                 if (!cancelled) {
-                    setError('Gagal memuat status portal. Coba muat ulang halaman.');
+                    setError('Gagal memuat data portal. Coba muat ulang halaman.');
                 }
             })
             .finally(() => {
@@ -43,7 +51,7 @@ export default function Landing() {
 
     return (
         <main className="bg-background text-foreground min-h-svh">
-            <div className="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-16">
+            <div className="mx-auto flex max-w-3xl flex-col gap-10 px-6 py-16">
                 <div className="flex flex-col items-center gap-4 text-center">
                     <h1 className="text-3xl font-semibold tracking-tight">
                         Status Portal Parkir
@@ -78,6 +86,15 @@ export default function Landing() {
                         {devices.map((device) => (
                             <DeviceStatusCard key={device.name} device={device} />
                         ))}
+                    </div>
+                )}
+
+                {!loading && !error && (
+                    <div className="flex flex-col gap-3">
+                        <h2 className="text-lg font-semibold tracking-tight">
+                            Aktivitas Terakhir
+                        </h2>
+                        <RecentActivityList activity={activity} />
                     </div>
                 )}
             </div>

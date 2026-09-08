@@ -9,15 +9,17 @@ import {
 } from '@/services/publicPortalService';
 import type { PublicAccessLog, PublicDeviceStatus } from '@/types';
 
+// TEMPORARY (Tahap 7): plain polling stands in for real-time updates
+// until Tahap 8 replaces it with WebSockets. Only this interval and the
+// load() call site below are expected to change then — state shape and
+// rendering stay the same.
+const POLL_INTERVAL_MS = 5000;
+
 /**
  * Public landing page (Tahap 7) — the only page in the app reachable
  * without logging in. Rendered directly at "/" in app.tsx, with no
  * ProtectedRoute/GuestOnlyRoute wrapper, so it stays visible to signed-out
  * visitors and signed-in staff alike.
- *
- * Fetches both the device snapshot and the recent-activity feed once on
- * mount for now; recurring polling (clearly marked as a Tahap-8-WebSocket
- * stand-in) lands in the next commit.
  */
 export default function Landing() {
     const [devices, setDevices] = useState<PublicDeviceStatus[]>([]);
@@ -28,24 +30,37 @@ export default function Landing() {
     useEffect(() => {
         let cancelled = false;
 
-        Promise.all([fetchPortalStatus(), fetchRecentActivity()])
-            .then(([devicesData, activityData]) => {
-                if (!cancelled) {
+        // `isInitial` distinguishes the first load (shows the skeleton,
+        // surfaces errors) from a background poll (updates silently on
+        // success; on failure, keeps the last known-good state on screen
+        // rather than blanking a working public page over one dropped
+        // request — it'll just try again in POLL_INTERVAL_MS).
+        const load = (isInitial: boolean) => {
+            if (isInitial) setLoading(true);
+
+            return Promise.all([fetchPortalStatus(), fetchRecentActivity()])
+                .then(([devicesData, activityData]) => {
+                    if (cancelled) return;
                     setDevices(devicesData);
                     setActivity(activityData);
-                }
-            })
-            .catch(() => {
-                if (!cancelled) {
-                    setError('Gagal memuat data portal. Coba muat ulang halaman.');
-                }
-            })
-            .finally(() => {
-                if (!cancelled) setLoading(false);
-            });
+                    setError(null);
+                })
+                .catch(() => {
+                    if (!cancelled && isInitial) {
+                        setError('Gagal memuat data portal. Coba muat ulang halaman.');
+                    }
+                })
+                .finally(() => {
+                    if (!cancelled && isInitial) setLoading(false);
+                });
+        };
+
+        load(true);
+        const intervalId = setInterval(() => load(false), POLL_INTERVAL_MS);
 
         return () => {
             cancelled = true;
+            clearInterval(intervalId);
         };
     }, []);
 
@@ -96,6 +111,12 @@ export default function Landing() {
                         </h2>
                         <RecentActivityList activity={activity} />
                     </div>
+                )}
+
+                {!loading && !error && (
+                    <p className="text-muted-foreground text-center text-xs">
+                        Status diperbarui otomatis setiap beberapa detik.
+                    </p>
                 )}
             </div>
         </main>

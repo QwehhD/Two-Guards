@@ -12,6 +12,7 @@ import Register from '@/pages/auth/register';
 import ResetPassword from '@/pages/auth/reset-password';
 import VerifyEmail from '@/pages/auth/verify-email';
 import Dashboard from '@/pages/dashboard';
+import Landing from '@/pages/Landing';
 import Appearance from '@/pages/settings/appearance';
 import Profile from '@/pages/settings/profile';
 import { useAuthStore } from '@/store/auth';
@@ -38,7 +39,7 @@ function GuestOnlyRoute({ children }: { children: ReactNode }) {
     }
 
     if (status === 'authenticated') {
-        return <Navigate to="/" replace />;
+        return <Navigate to="/dashboard" replace />;
     }
 
     return <>{children}</>;
@@ -119,11 +120,18 @@ export default function App() {
                 }
             />
 
+            {/*
+                Public landing page (Tahap 7) — the only route in the app
+                that is intentionally left unwrapped by ProtectedRoute or
+                GuestOnlyRoute, so it renders the same for guests and
+                signed-in staff alike.
+            */}
+            <Route path="/" element={<Landing />} />
             <Route
-                path="/"
+                path="/dashboard"
                 element={
                     <ProtectedRoute>
-                        <AppLayout breadcrumbs={[{ title: 'Dashboard', href: '/' }]}>
+                        <AppLayout breadcrumbs={[{ title: 'Dashboard', href: '/dashboard' }]}>
                             <Dashboard />
                         </AppLayout>
                     </ProtectedRoute>

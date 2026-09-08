@@ -22,7 +22,19 @@ export async function ensureCsrfCookie(): Promise<void> {
 api.interceptors.response.use(
     (response) => response,
     (error) => {
-        if (error.response?.status === 401 && window.location.pathname !== '/login') {
+        // GET /api/me is the passive "am I logged in?" check that runs on
+        // every page load (see useAuthStore.fetchUser), including the
+        // public landing page. A 401 from it just means "guest" — that's
+        // an expected, normal outcome, not a session that expired mid-use,
+        // so it must NOT trigger the same redirect-to-login as a 401 from
+        // an actual authenticated action.
+        const isIdentityCheck = error.config?.url === '/api/me';
+
+        if (
+            error.response?.status === 401 &&
+            !isIdentityCheck &&
+            window.location.pathname !== '/login'
+        ) {
             window.location.href = '/login';
         }
 

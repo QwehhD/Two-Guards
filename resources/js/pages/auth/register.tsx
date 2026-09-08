@@ -38,7 +38,7 @@ export default function Register() {
 
             const { data: user } = await api.get('/api/me');
             setUser(user);
-            navigate('/');
+            navigate('/dashboard');
         } catch (error: any) {
             if (error.response?.status === 422) {
                 setErrors(error.response.data.errors ?? {});

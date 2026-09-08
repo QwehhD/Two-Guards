@@ -26,7 +26,12 @@ class PublicAccessLogResource extends JsonResource
         return [
             'status' => $this->status->value,
             'mode' => $this->mode->value,
-            'scanned_at' => $this->scanned_at?->diffForHumans(),
+            // Explicit locale: the app has no locale switcher and every
+            // other user-facing string is Indonesian, but Carbon's default
+            // locale follows config('app.locale') (env APP_LOCALE, "en"
+            // unless overridden) — without this, diffForHumans() would
+            // silently render English ("2 minutes ago") on this one field.
+            'scanned_at' => $this->scanned_at?->locale('id')->diffForHumans(),
         ];
     }
 }

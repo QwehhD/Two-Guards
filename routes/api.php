@@ -5,6 +5,8 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DeviceController;
 use App\Http\Controllers\Api\PasswordController;
 use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\Api\PublicPortalStatusController;
+use App\Http\Controllers\Api\PublicRecentActivityController;
 use App\Http\Controllers\Api\RfidCardController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
@@ -12,6 +14,18 @@ use Illuminate\Support\Facades\Route;
 // Login, registration, and logout are handled by Laravel Fortify's
 // built-in session routes: POST /login, POST /register, POST /logout.
 // The React SPA hits /sanctum/csrf-cookie first, then those endpoints.
+
+// Public landing page data (Tahap 7). Deliberately outside every
+// auth:sanctum group below — these are the only two API endpoints in the
+// whole app meant to be reachable without logging in. Each controller is
+// scoped to expose only general status, never anything from access_logs
+// that could identify a person (see PublicPortalStatusController and
+// PublicRecentActivityController + PublicAccessLogResource for the
+// specific fields deliberately excluded).
+Route::prefix('public')->group(function () {
+    Route::get('portal-status', [PublicPortalStatusController::class, 'index']);
+    Route::get('recent-activity', [PublicRecentActivityController::class, 'index']);
+});
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('me', [AuthController::class, 'me']);

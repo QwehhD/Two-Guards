@@ -1,24 +1,20 @@
 import axios from 'axios';
 import { Check, Clock, X } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { SimulateScanButton } from '@/components/simulate-scan-button';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { playAlertSound } from '@/lib/alert-sound';
+import { echo } from '@/services/echo';
 import {
     approveAccessLog,
     fetchPendingAccessLogs,
     rejectAccessLog,
 } from '@/services/accessLogService';
 import type { AccessLog } from '@/types';
-
-// TEMPORARY (Tahap 6): there's no WebSocket/real-time feed yet, so this
-// page polls the pending-scans list on an interval. Replace this with a
-// live subscription once Tahap 8 wires up WebSocket, and remove this
-// comment along with the polling effect below.
-const POLL_INTERVAL_MS = 4000;
 
 // Mirrors AccessLog::PENDING_TIMEOUT_SECONDS on the backend. This is only
 // used to render a live countdown on the client — the backend independently
@@ -114,32 +110,15 @@ export default function Approvals() {
     const [loading, setLoading] = useState(true);
     const [processingIds, setProcessingIds] = useState<Set<number>>(new Set());
 
-    // Tracks which log IDs we've already shown to the user, so the
-    // "new scan" toast only fires for scans that showed up since the last
-    // poll — not for every item on the very first load.
-    const knownIdsRef = useRef<Set<number> | null>(null);
-
+    // One-off snapshot for the initial page load only — the private
+    // "access-logs" channel subscribed to below is what keeps this list
+    // live afterwards, not a repeated fetch.
     const loadPending = useCallback(async () => {
         try {
             const response = await fetchPendingAccessLogs();
-            const nextLogs = sortByScannedAtDesc(response.data);
-
-            if (knownIdsRef.current) {
-                const newOnes = nextLogs.filter((log) => !knownIdsRef.current!.has(log.id));
-                for (const log of newOnes) {
-                    toast.info(`Scan baru menunggu persetujuan: ${log.owner_name}`, {
-                        description: log.device?.name ?? undefined,
-                    });
-                }
-            }
-
-            knownIdsRef.current = new Set(nextLogs.map((log) => log.id));
-            setLogs(nextLogs);
+            setLogs(sortByScannedAtDesc(response.data));
         } catch {
-            // Silent on polling failures — the list simply won't refresh
-            // until the next tick. Surfacing an error toast every few
-            // seconds for a background poll would be worse UX than a
-            // briefly stale list.
+            toast.error('Gagal memuat daftar scan yang menunggu persetujuan.');
         } finally {
             setLoading(false);
         }
@@ -147,10 +126,38 @@ export default function Approvals() {
 
     useEffect(() => {
         void loadPending();
-
-        const interval = setInterval(() => void loadPending(), POLL_INTERVAL_MS);
-        return () => clearInterval(interval);
     }, [loadPending]);
+
+    useEffect(() => {
+        const channel = echo.private('access-logs');
+
+        // Leading "." on both event names: the backend events override
+        // broadcastAs() with a plain name (no "App.Events." namespace),
+        // so Echo must be told not to prepend its default namespace when
+        // matching against what actually arrives on the wire.
+        channel.listen('.AccessLogCreated', ({ access_log: log }: { access_log: AccessLog }) => {
+            // Upsert, not a blind prepend: the initial REST snapshot above
+            // and this live push both run independently, so on a rare
+            // unlucky timing they could otherwise both add the same scan.
+            setLogs((prev) => sortByScannedAtDesc([log, ...prev.filter((item) => item.id !== log.id)]));
+
+            toast.info(`Scan baru menunggu persetujuan: ${log.owner_name}`, {
+                description: log.device?.name ?? undefined,
+            });
+            playAlertSound();
+        });
+
+        channel.listen('.AccessLogResolved', ({ access_log: log }: { access_log: AccessLog }) => {
+            // A no-op if this tab is the one that resolved it — handleDecision
+            // already removed it optimistically. Matters for every OTHER
+            // tab/user looking at this same page.
+            setLogs((prev) => prev.filter((item) => item.id !== log.id));
+        });
+
+        return () => {
+            echo.leave('access-logs');
+        };
+    }, []);
 
     const handleDecision = async (log: AccessLog, decision: 'approve' | 'reject') => {
         setProcessingIds((prev) => new Set(prev).add(log.id));

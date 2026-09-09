@@ -6,6 +6,8 @@ use App\Enums\AccessLogMode;
 use App\Enums\AccessLogStatus;
 use App\Enums\DeviceMode;
 use App\Enums\RfidCardStatus;
+use App\Events\AccessLogCreated;
+use App\Events\RecentActivityUpdated;
 use App\Models\AccessLog;
 use App\Models\Device;
 use App\Models\RfidCard;
@@ -38,7 +40,7 @@ class AccessDecisionService
 
         $now = now();
 
-        return AccessLog::create([
+        $log = AccessLog::create([
             'device_id' => $device->id,
             'rfid_card_id' => $card?->id,
             'scanned_uid' => $uid,
@@ -48,5 +50,18 @@ class AccessDecisionService
             'scanned_at' => $now,
             'processed_at' => $status === AccessLogStatus::Pending ? null : $now,
         ]);
+
+        // Every new scan is new recent activity for the public landing
+        // page, whatever its status — including an auto-mode scan that
+        // was already approved/denied the instant it was recorded.
+        RecentActivityUpdated::dispatch();
+
+        // Only a scan left pending needs a human decision, so only that
+        // case is relevant to the Approvals page's private feed.
+        if ($status === AccessLogStatus::Pending) {
+            AccessLogCreated::dispatch($log);
+        }
+
+        return $log;
     }
 }

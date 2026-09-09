@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Enums\AccessLogStatus;
+use App\Events\AccessLogResolved;
 use App\Models\AccessLog;
 use Illuminate\Console\Command;
 
@@ -27,15 +28,37 @@ class ExpirePendingAccessLogs extends Command
     {
         $cutoff = now()->subSeconds(AccessLog::PENDING_TIMEOUT_SECONDS);
 
-        $expired = AccessLog::query()
+        $candidates = AccessLog::query()
             ->where('status', AccessLogStatus::Pending)
             ->where('scanned_at', '<=', $cutoff)
-            ->update([
-                'status' => AccessLogStatus::Expired,
-                'processed_at' => now(),
-            ]);
+            ->get();
 
-        $this->info("Expired {$expired} pending access log(s) older than ".AccessLog::PENDING_TIMEOUT_SECONDS.' second(s).');
+        $expiredCount = 0;
+
+        // Updated (and broadcast) one row at a time, guarded by a
+        // status check in the WHERE clause, instead of one bulk UPDATE:
+        // a bulk update can't tell which rows it actually changed, so
+        // it can't say which AccessLogResolved events to broadcast. The
+        // guard also means a scan that an approve/reject request
+        // resolves in the moment between this command's SELECT and
+        // UPDATE is left alone — the same race protection the
+        // approve/reject endpoint already applies from its side.
+        foreach ($candidates as $log) {
+            $updated = AccessLog::query()
+                ->whereKey($log->id)
+                ->where('status', AccessLogStatus::Pending)
+                ->update([
+                    'status' => AccessLogStatus::Expired,
+                    'processed_at' => now(),
+                ]);
+
+            if ($updated === 1) {
+                $expiredCount++;
+                AccessLogResolved::dispatch($log->refresh());
+            }
+        }
+
+        $this->info("Expired {$expiredCount} pending access log(s) older than ".AccessLog::PENDING_TIMEOUT_SECONDS.' second(s).');
 
         return self::SUCCESS;
     }

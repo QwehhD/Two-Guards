@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Enums\AccessLogMode;
 use App\Enums\AccessLogStatus;
+use App\Events\AccessLogResolved;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AccessLogs\SimulateScanRequest;
 use App\Http\Resources\AccessLogResource;
@@ -138,7 +139,10 @@ class AccessLogController extends Controller
                     'processed_at' => now(),
                 ]);
 
-                return ['error' => 'This scan has expired and can no longer be approved or rejected.'];
+                // Still a resolution — other clients' Approvals pages must
+                // drop this item too, even though the actor who triggered
+                // it just gets an error response.
+                return ['error' => 'This scan has expired and can no longer be approved or rejected.', 'resolved' => $locked];
             }
 
             $locked->update([
@@ -149,6 +153,13 @@ class AccessLogController extends Controller
 
             return ['log' => $locked];
         });
+
+        // Dispatched after the transaction commits, not inside it, so the
+        // broadcast (and its queued job) never race a reader against a
+        // write that hasn't been committed yet.
+        if ($resolved = $result['log'] ?? $result['resolved'] ?? null) {
+            AccessLogResolved::dispatch($resolved);
+        }
 
         if (isset($result['error'])) {
             return response()->json(['message' => $result['error']], 422);

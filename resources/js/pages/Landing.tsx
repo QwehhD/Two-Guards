@@ -3,17 +3,12 @@ import { DeviceStatusCard } from '@/components/landing/device-status-card';
 import { RecentActivityList } from '@/components/landing/recent-activity-list';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
+import { echo } from '@/services/echo';
 import {
     fetchPortalStatus,
     fetchRecentActivity,
 } from '@/services/publicPortalService';
 import type { PublicAccessLog, PublicDeviceStatus } from '@/types';
-
-// TEMPORARY (Tahap 7): plain polling stands in for real-time updates
-// until Tahap 8 replaces it with WebSockets. Only this interval and the
-// load() call site below are expected to change then — state shape and
-// rendering stay the same.
-const POLL_INTERVAL_MS = 5000;
 
 /**
  * Public landing page (Tahap 7) — the only page in the app reachable
@@ -27,40 +22,58 @@ export default function Landing() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
+    // One-off snapshot for the first paint, before the "landing" channel
+    // subscription below has connected — that channel is what keeps this
+    // page live afterwards, not a repeated fetch.
     useEffect(() => {
         let cancelled = false;
 
-        // `isInitial` distinguishes the first load (shows the skeleton,
-        // surfaces errors) from a background poll (updates silently on
-        // success; on failure, keeps the last known-good state on screen
-        // rather than blanking a working public page over one dropped
-        // request — it'll just try again in POLL_INTERVAL_MS).
-        const load = (isInitial: boolean) => {
-            if (isInitial) setLoading(true);
-
-            return Promise.all([fetchPortalStatus(), fetchRecentActivity()])
-                .then(([devicesData, activityData]) => {
-                    if (cancelled) return;
-                    setDevices(devicesData);
-                    setActivity(activityData);
-                    setError(null);
-                })
-                .catch(() => {
-                    if (!cancelled && isInitial) {
-                        setError('Gagal memuat data portal. Coba muat ulang halaman.');
-                    }
-                })
-                .finally(() => {
-                    if (!cancelled && isInitial) setLoading(false);
-                });
-        };
-
-        load(true);
-        const intervalId = setInterval(() => load(false), POLL_INTERVAL_MS);
+        Promise.all([fetchPortalStatus(), fetchRecentActivity()])
+            .then(([devicesData, activityData]) => {
+                if (cancelled) return;
+                setDevices(devicesData);
+                setActivity(activityData);
+                setError(null);
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setError('Gagal memuat data portal. Coba muat ulang halaman.');
+                }
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
 
         return () => {
             cancelled = true;
-            clearInterval(intervalId);
+        };
+    }, []);
+
+    useEffect(() => {
+        // Public channel — no `.private()`/auth needed, matching this
+        // page being reachable by signed-out visitors too.
+        const channel = echo.channel('landing');
+
+        // Leading "." on both event names — see the same note on the
+        // Approvals page's private-channel subscription: broadcastAs()
+        // on the backend events means no "App.Events." namespace prefix
+        // is sent, so Echo must be told not to expect one either.
+        channel.listen(
+            '.PortalStatusUpdated',
+            ({ devices: nextDevices }: { devices: PublicDeviceStatus[] }) => {
+                setDevices(nextDevices);
+            },
+        );
+
+        channel.listen(
+            '.RecentActivityUpdated',
+            ({ recent_activity: nextActivity }: { recent_activity: PublicAccessLog[] }) => {
+                setActivity(nextActivity);
+            },
+        );
+
+        return () => {
+            echo.leave('landing');
         };
     }, []);
 
@@ -115,7 +128,7 @@ export default function Landing() {
 
                 {!loading && !error && (
                     <p className="text-muted-foreground text-center text-xs">
-                        Status diperbarui otomatis setiap beberapa detik.
+                        Status diperbarui otomatis secara real-time.
                     </p>
                 )}
             </div>

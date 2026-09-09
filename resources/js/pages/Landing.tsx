@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import AppLogo from '@/components/app-logo';
 import { DeviceStatusCard } from '@/components/landing/device-status-card';
 import { RecentActivityList } from '@/components/landing/recent-activity-list';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
     fetchPortalStatus,
@@ -67,6 +70,15 @@ export default function Landing() {
     return (
         <main className="bg-background text-foreground min-h-svh">
             <div className="mx-auto flex max-w-3xl flex-col gap-10 px-6 py-16">
+                <header className="flex items-center justify-between gap-4">
+                    <div className="flex items-center">
+                        <AppLogo />
+                    </div>
+                    <Button asChild variant="outline" size="sm">
+                        <Link to="/login">Login</Link>
+                    </Button>
+                </header>
+
                 <div className="flex flex-col items-center gap-4 text-center">
                     <h1 className="text-3xl font-semibold tracking-tight">
                         Status Portal Parkir

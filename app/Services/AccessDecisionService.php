@@ -11,22 +11,32 @@ use App\Events\RecentActivityUpdated;
 use App\Models\AccessLog;
 use App\Models\Device;
 use App\Models\RfidCard;
+use Carbon\CarbonInterface;
 
 /**
  * Turns a raw card scan into an access decision and records it.
  *
  * This is the single source of truth for the auto/manual + valid/invalid
  * decision matrix. The development-only simulate-scan endpoint (Tahap 6)
- * calls this today; the real MQTT listener (Tahap 9) will call this same
- * service once hardware exists, instead of duplicating the logic.
+ * and the real MQTT listener (Tahap 9) both call this exact method,
+ * instead of duplicating the decision logic at either call site.
  */
 class AccessDecisionService
 {
     /**
      * Record a scan of the given UID on the given device, and decide
      * whether it is approved, denied, or left pending for manual review.
+     *
+     * $scannedAt is when the physical scan happened, as reported by the
+     * device. It defaults to now() for callers that have no such
+     * timestamp of their own (e.g. the HTTP simulate-scan endpoint,
+     * where the HTTP request itself is the "scan"). It is deliberately
+     * kept separate from processed_at below, which always reflects when
+     * *this server* made the decision — those two can legitimately
+     * differ for a real device (e.g. a scan queued briefly by the ESP32
+     * before it reached the broker).
      */
-    public function decide(Device $device, string $uid): AccessLog
+    public function decide(Device $device, string $uid, ?CarbonInterface $scannedAt = null): AccessLog
     {
         $card = RfidCard::query()->where('uid', $uid)->first();
         $isCardValid = $card !== null && $card->status === RfidCardStatus::Active;
@@ -38,8 +48,6 @@ class AccessDecisionService
             default => AccessLogStatus::Denied,
         };
 
-        $now = now();
-
         $log = AccessLog::create([
             'device_id' => $device->id,
             'rfid_card_id' => $card?->id,
@@ -47,8 +55,8 @@ class AccessDecisionService
             'mode' => AccessLogMode::from($device->mode->value),
             'status' => $status,
             'processed_by' => null,
-            'scanned_at' => $now,
-            'processed_at' => $status === AccessLogStatus::Pending ? null : $now,
+            'scanned_at' => $scannedAt ?? now(),
+            'processed_at' => $status === AccessLogStatus::Pending ? null : now(),
         ]);
 
         // Every new scan is new recent activity for the public landing

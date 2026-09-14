@@ -11,13 +11,16 @@ use App\Http\Resources\AccessLogResource;
 use App\Models\AccessLog;
 use App\Models\Device;
 use App\Services\AccessDecisionService;
+use App\Services\MqttPublisherService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Throwable;
 
 class AccessLogController extends Controller
 {
@@ -93,21 +96,21 @@ class AccessLogController extends Controller
     /**
      * Approve a pending manual-mode scan. Both admin and karyawan may do this.
      */
-    public function approve(Request $request, AccessLog $accessLog): JsonResponse
+    public function approve(Request $request, AccessLog $accessLog, MqttPublisherService $mqttPublisher): JsonResponse
     {
         $this->authorize('approve', $accessLog);
 
-        return $this->resolve($request, $accessLog, AccessLogStatus::Approved);
+        return $this->resolve($request, $accessLog, AccessLogStatus::Approved, $mqttPublisher);
     }
 
     /**
      * Reject a pending manual-mode scan. Both admin and karyawan may do this.
      */
-    public function reject(Request $request, AccessLog $accessLog): JsonResponse
+    public function reject(Request $request, AccessLog $accessLog, MqttPublisherService $mqttPublisher): JsonResponse
     {
         $this->authorize('reject', $accessLog);
 
-        return $this->resolve($request, $accessLog, AccessLogStatus::Denied);
+        return $this->resolve($request, $accessLog, AccessLogStatus::Denied, $mqttPublisher);
     }
 
     /**
@@ -117,7 +120,7 @@ class AccessLogController extends Controller
      * to the same row: whichever transaction gets the row lock first
      * resolves the log, and the other sees the already-updated state.
      */
-    private function resolve(Request $request, AccessLog $accessLog, AccessLogStatus $status): JsonResponse
+    private function resolve(Request $request, AccessLog $accessLog, AccessLogStatus $status, MqttPublisherService $mqttPublisher): JsonResponse
     {
         $result = DB::transaction(function () use ($accessLog, $status, $request) {
             $locked = AccessLog::query()->whereKey($accessLog->id)->lockForUpdate()->firstOrFail();
@@ -159,6 +162,31 @@ class AccessLogController extends Controller
         // write that hasn't been committed yet.
         if ($resolved = $result['log'] ?? $result['resolved'] ?? null) {
             AccessLogResolved::dispatch($resolved);
+        }
+
+        // Only a genuine approve/reject sends a device command here — the
+        // self-heal "already expired" branch above deliberately doesn't:
+        // that scan already timed out before any human decided, so there
+        // is nothing fresh to tell the device. The periodic expire-pending
+        // command hits the exact same "expired, no command" case.
+        //
+        // Published after the transaction commits, for the same reason as
+        // AccessLogResolved above — but doubly so here: telling the device
+        // to physically open the gate before the DB write is guaranteed
+        // durable would be worse than a merely stale broadcast.
+        if ($resolvedLog = $result['log'] ?? null) {
+            $action = $status === AccessLogStatus::Approved ? 'open' : 'deny';
+
+            try {
+                $mqttPublisher->publishCommand($resolvedLog->device_id, $action);
+            } catch (Throwable $e) {
+                // The decision is already durably recorded; a device that
+                // never receives this command is no different from one
+                // that's simply offline right now, so this must not turn
+                // an otherwise-successful approve/reject into an error
+                // response — just make the failure loud in the logs.
+                Log::error("AccessLogController: failed to publish [{$action}] command to device [{$resolvedLog->device_id}]: {$e->getMessage()}");
+            }
         }
 
         if (isset($result['error'])) {

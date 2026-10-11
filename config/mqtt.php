@@ -42,13 +42,26 @@ return [
     |--------------------------------------------------------------------------
     |
     | Seconds MqttPublisherService waits to connect to the broker before
-    | giving up. It runs inside the approve/reject HTTP request, so this
-    | is how long a user is left waiting when the broker is unreachable —
-    | php-mqtt's own default of 60 seconds is far too long for that.
+    | giving up. Every attempt of the PublishDeviceCommand job has to fit
+    | inside the command's short TTL below, so php-mqtt's own default of
+    | 60 seconds is far too long for it.
     |
     */
 
     'connect_timeout' => env('MQTT_CONNECT_TIMEOUT', 3),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Publisher PUBACK Timeout
+    |--------------------------------------------------------------------------
+    |
+    | Whole seconds MqttPublisherService waits for the broker to acknowledge
+    | a QoS 1 command before treating it as not delivered (the job then
+    | retries until the TTL). A local broker answers within milliseconds.
+    |
+    */
+
+    'puback_timeout' => env('MQTT_PUBACK_TIMEOUT', 2),
 
     /*
     |--------------------------------------------------------------------------

@@ -7,6 +7,7 @@ use App\Enums\DeviceStatus;
 use App\Enums\PortalStatus;
 use App\Events\PortalStatusUpdated;
 use App\Models\Device;
+use App\Mqtt\DeviceCommand;
 use App\Services\AccessDecisionService;
 use App\Services\MqttPublisherService;
 use Carbon\Carbon;
@@ -182,10 +183,11 @@ class MqttListen extends Command
             return;
         }
 
-        $action = $log->status === AccessLogStatus::Approved ? 'open' : 'deny';
+        $command = DeviceCommand::fromAccessLog($log);
+        $action = $command->action->value;
 
         try {
-            $publisher->publishCommand($device->id, $action);
+            $publisher->publish($command);
         } catch (Throwable $e) {
             // Same structured context as AccessLogController::resolve()'s
             // publish failure, so both paths can be traced the same way.

@@ -4,14 +4,16 @@ namespace App\Http\Controllers\Api;
 
 use App\Enums\AccessLogMode;
 use App\Enums\AccessLogStatus;
+use App\Enums\DeviceCommandAction;
 use App\Events\AccessLogResolved;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AccessLogs\SimulateScanRequest;
 use App\Http\Resources\AccessLogResource;
+use App\Jobs\PublishDeviceCommand;
 use App\Models\AccessLog;
 use App\Models\Device;
+use App\Mqtt\DeviceCommand;
 use App\Services\AccessDecisionService;
-use App\Services\MqttPublisherService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -96,21 +98,21 @@ class AccessLogController extends Controller
     /**
      * Approve a pending manual-mode scan. Both admin and karyawan may do this.
      */
-    public function approve(Request $request, AccessLog $accessLog, MqttPublisherService $mqttPublisher): JsonResponse
+    public function approve(Request $request, AccessLog $accessLog): JsonResponse
     {
         $this->authorize('approve', $accessLog);
 
-        return $this->resolve($request, $accessLog, AccessLogStatus::Approved, $mqttPublisher);
+        return $this->resolve($request, $accessLog, AccessLogStatus::Approved);
     }
 
     /**
      * Reject a pending manual-mode scan. Both admin and karyawan may do this.
      */
-    public function reject(Request $request, AccessLog $accessLog, MqttPublisherService $mqttPublisher): JsonResponse
+    public function reject(Request $request, AccessLog $accessLog): JsonResponse
     {
         $this->authorize('reject', $accessLog);
 
-        return $this->resolve($request, $accessLog, AccessLogStatus::Denied, $mqttPublisher);
+        return $this->resolve($request, $accessLog, AccessLogStatus::Denied);
     }
 
     /**
@@ -120,7 +122,7 @@ class AccessLogController extends Controller
      * to the same row: whichever transaction gets the row lock first
      * resolves the log, and the other sees the already-updated state.
      */
-    private function resolve(Request $request, AccessLog $accessLog, AccessLogStatus $status, MqttPublisherService $mqttPublisher): JsonResponse
+    private function resolve(Request $request, AccessLog $accessLog, AccessLogStatus $status): JsonResponse
     {
         $result = DB::transaction(function () use ($accessLog, $status, $request) {
             $locked = AccessLog::query()->whereKey($accessLog->id)->lockForUpdate()->firstOrFail();
@@ -170,27 +172,26 @@ class AccessLogController extends Controller
         // is nothing fresh to tell the device. The periodic expire-pending
         // command hits the exact same "expired, no command" case.
         //
-        // Published after the transaction commits, for the same reason as
+        // Queued after the transaction commits, for the same reason as
         // AccessLogResolved above — but doubly so here: telling the device
         // to physically open the gate before the DB write is guaranteed
-        // durable would be worse than a merely stale broadcast.
+        // durable would be worse than a merely stale broadcast. Publishing
+        // happens in the PublishDeviceCommand job on its own queue, so a
+        // slow or hung broker never holds up this response; that job logs
+        // its own failure if the command is never delivered.
         if ($resolvedLog = $result['log'] ?? null) {
-            $action = $status === AccessLogStatus::Approved ? 'open' : 'deny';
-
             try {
-                $mqttPublisher->publishCommand($resolvedLog->device_id, $action);
+                PublishDeviceCommand::dispatch(DeviceCommand::fromAccessLog($resolvedLog));
             } catch (Throwable $e) {
-                // The decision is already durably recorded; a device that
-                // never receives this command is no different from one
-                // that's simply offline right now, so this must not turn
-                // an otherwise-successful approve/reject into an error
-                // response — just make the failure loud in the logs, with
-                // enough context to trace which decision never reached
-                // which device.
-                Log::error('AccessLogController: failed to publish device command after resolving access log.', [
+                // The decision is already durably recorded; failing to even
+                // queue its command must not turn an otherwise-successful
+                // approve/reject into an error response — just make it loud
+                // in the logs, with enough context to trace which decision
+                // never reached which device.
+                Log::error('AccessLogController: failed to queue device command after resolving access log.', [
                     'access_log_id' => $resolvedLog->id,
                     'device_id' => $resolvedLog->device_id,
-                    'action' => $action,
+                    'action' => DeviceCommandAction::fromStatus($status)->value,
                     'exception' => $e::class,
                     'message' => $e->getMessage(),
                 ]);

@@ -4,7 +4,6 @@ namespace Tests;
 
 use App\Services\MqttPublisherService;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
-use Laravel\Fortify\Features;
 use Mockery;
 
 abstract class TestCase extends BaseTestCase
@@ -31,10 +30,15 @@ abstract class TestCase extends BaseTestCase
         parent::tearDown();
     }
 
-    protected function skipUnlessFortifyHas(string $feature, ?string $message = null): void
+    /**
+     * Fortify's 2FA, passkey and password-confirmation screens were built for
+     * the old Inertia frontend. They are deferred, not dropped: tests in the
+     * `deferred-security` group stay as a reminder (run them with
+     * `php artisan test --group=deferred-security`) until those features
+     * come back as API endpoints in a follow-up task.
+     */
+    protected function skipDeferredSecurityFeature(): void
     {
-        if (! Features::enabled($feature)) {
-            $this->markTestSkipped($message ?? "Fortify feature [{$feature}] is not enabled.");
-        }
+        $this->markTestSkipped('Ditunda: 2FA, passkey, dan konfirmasi password Fortify akan dibuat ulang sebagai API di task terpisah.');
     }
 }

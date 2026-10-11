@@ -5,11 +5,20 @@ namespace Tests\Feature\Auth;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
+use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
 
+#[Group('deferred-security')]
 class PasswordConfirmationTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->skipDeferredSecurityFeature();
+    }
 
     public function test_confirm_password_screen_can_be_rendered()
     {

@@ -187,7 +187,16 @@ class MqttListen extends Command
         try {
             $publisher->publishCommand($device->id, $action);
         } catch (Throwable $e) {
-            $this->logError("Failed to publish [{$action}] command to device [{$deviceId}]: {$e->getMessage()}");
+            // Same structured context as AccessLogController::resolve()'s
+            // publish failure, so both paths can be traced the same way.
+            $this->error("mqtt:listen: Failed to publish [{$action}] command to device [{$deviceId}] for access log [{$log->id}]: {$e->getMessage()}");
+            Log::error('mqtt:listen: failed to publish device command after recording scan.', [
+                'access_log_id' => $log->id,
+                'device_id' => $device->id,
+                'action' => $action,
+                'exception' => $e::class,
+                'message' => $e->getMessage(),
+            ]);
         }
     }
 

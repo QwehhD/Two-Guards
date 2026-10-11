@@ -44,6 +44,35 @@ readonly class DeviceCommand
         );
     }
 
+    /**
+     * The inverse of topic() + payload(): recognises a command among the
+     * raw messages php-mqtt keeps while waiting for their PUBACK. Anything
+     * that isn't one of our commands gives null.
+     */
+    public static function fromMessage(string $topic, string $payload): ?self
+    {
+        if (! preg_match('#^parkir/(\d+)/command$#', $topic, $matches)) {
+            return null;
+        }
+
+        $data = json_decode($payload, true);
+
+        if (! is_array($data)
+            || ! is_string($data['action'] ?? null)
+            || ! is_int($data['access_log_id'] ?? null)
+            || ! is_int($data['issued_at'] ?? null)) {
+            return null;
+        }
+
+        $action = DeviceCommandAction::tryFrom($data['action']);
+
+        if ($action === null) {
+            return null;
+        }
+
+        return new self((int) $matches[1], $action, $data['access_log_id'], $data['issued_at']);
+    }
+
     public function topic(): string
     {
         return "parkir/{$this->deviceId}/command";

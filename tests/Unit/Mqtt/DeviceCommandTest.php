@@ -94,6 +94,32 @@ class DeviceCommandTest extends TestCase
         $this->assertSame(self::DECIDED_AT_EPOCH + 25, $command->staleAt());
     }
 
+    public function test_a_published_message_reads_back_as_the_same_command(): void
+    {
+        $command = DeviceCommand::fromAccessLog($this->decidedLog(AccessLogStatus::Denied));
+
+        $this->assertEquals($command, DeviceCommand::fromMessage($command->topic(), $command->payload()));
+    }
+
+    #[DataProvider('messagesThatAreNotCommands')]
+    public function test_a_message_that_is_not_a_command_reads_back_as_null(string $topic, string $payload): void
+    {
+        $this->assertNull(DeviceCommand::fromMessage($topic, $payload));
+    }
+
+    public static function messagesThatAreNotCommands(): array
+    {
+        $valid = '{"action":"open","access_log_id":42,"issued_at":1791707464}';
+
+        return [
+            'another topic' => ['parkir/7/status', $valid],
+            'not json' => ['parkir/7/command', 'open'],
+            'unknown action' => ['parkir/7/command', '{"action":"close","access_log_id":42,"issued_at":1791707464}'],
+            'issued_at as a string' => ['parkir/7/command', '{"action":"open","access_log_id":42,"issued_at":"1791707464"}'],
+            'missing access_log_id' => ['parkir/7/command', '{"action":"open","issued_at":1791707464}'],
+        ];
+    }
+
     /**
      * An in-memory access log (never saved), so these stay pure unit tests.
      */

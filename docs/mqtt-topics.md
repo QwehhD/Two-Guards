@@ -24,13 +24,13 @@ memutus koneksi di broker, jadi jangan menjalankan dua `mqtt:listen` dengan pref
 Dikirim device setiap kali kartu ditempelkan.
 
 ```json
-{"uid": "A1B2C3D4", "scanned_at": "2026-10-11T08:31:04Z"}
+{"uid": "A1B2C3D4", "scanned_at": 1791707464}
 ```
 
 | Field | Wajib | Keterangan |
 | --- | --- | --- |
 | `uid` | ya | String tidak kosong, UID kartu apa adanya. |
-| `scanned_at` | tidak | Waktu scan di device. Diterima ISO-8601 (`2026-10-11T08:31:04Z`) atau `@` + epoch detik (`@1791707464`). Epoch tanpa `@` **tidak** terbaca; server lalu memakai waktu terima dan mencatat warning. |
+| `scanned_at` | tidak | Waktu scan di device. **Disarankan epoch detik** (UTC) sebagai integer, misalnya `1791707464`, sama seperti `issued_at` pada command. Juga diterima: string berisi angka saja (`"1791707464"`) dan ISO-8601 (`"2026-10-11T08:31:04Z"`, atau dengan offset seperti `+07:00`, yang dikonversi ke UTC). Pecahan detik (`1791707464.5`) dan teks lain tidak terbaca; server lalu memakai waktu terima dan mencatat warning. |
 
 Payload yang rusak, topic yang bentuknya lain, atau `device_id` yang tidak terdaftar diabaikan
 dengan warning di log.
@@ -123,6 +123,9 @@ mosquitto_sub -h localhost -t 'parkir/+/command' -F '%I | %t | %p'
 
 # Scan di device 1 (auto: langsung dibalas command; manual: muncul di halaman Persetujuan)
 mosquitto_pub -h localhost -t parkir/1/scan -m '{"uid":"A1B2C3D4"}'
+
+# Scan dengan waktu scan dari device (epoch detik, seperti yang akan dikirim ESP32)
+mosquitto_pub -h localhost -t parkir/1/scan -m "{\"uid\":\"A1B2C3D4\",\"scanned_at\":$(date +%s)}"
 
 # Heartbeat dan LWT
 mosquitto_pub -h localhost -t parkir/1/status -m '{"online":true,"portal_status":"closed"}'

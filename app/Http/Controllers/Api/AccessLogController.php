@@ -184,8 +184,16 @@ class AccessLogController extends Controller
                 // never receives this command is no different from one
                 // that's simply offline right now, so this must not turn
                 // an otherwise-successful approve/reject into an error
-                // response — just make the failure loud in the logs.
-                Log::error("AccessLogController: failed to publish [{$action}] command to device [{$resolvedLog->device_id}]: {$e->getMessage()}");
+                // response — just make the failure loud in the logs, with
+                // enough context to trace which decision never reached
+                // which device.
+                Log::error('AccessLogController: failed to publish device command after resolving access log.', [
+                    'access_log_id' => $resolvedLog->id,
+                    'device_id' => $resolvedLog->device_id,
+                    'action' => $action,
+                    'exception' => $e::class,
+                    'message' => $e->getMessage(),
+                ]);
             }
         }
 

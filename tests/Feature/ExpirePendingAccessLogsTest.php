@@ -4,12 +4,24 @@ namespace Tests\Feature;
 
 use App\Enums\AccessLogStatus;
 use App\Models\AccessLog;
+use Illuminate\Console\Scheduling\Event;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class ExpirePendingAccessLogsTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_it_is_scheduled_every_five_seconds_without_overlapping(): void
+    {
+        $events = collect($this->app->make(Schedule::class)->events())
+            ->filter(fn (Event $event) => str_contains((string) $event->command, 'access-logs:expire-pending'));
+
+        $this->assertCount(1, $events);
+        $this->assertSame(5, $events->first()->repeatSeconds);
+        $this->assertTrue($events->first()->withoutOverlapping);
+    }
 
     public function test_it_expires_pending_logs_older_than_the_timeout(): void
     {

@@ -24,6 +24,7 @@ use PhpMqtt\Client\ConnectionSettings;
 use PhpMqtt\Client\Contracts\Repository;
 use PhpMqtt\Client\MqttClient as PhpMqttClient;
 use PhpMqtt\Client\PublishedMessage;
+use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\BufferedOutput;
@@ -181,6 +182,57 @@ class MqttListenTest extends TestCase
             'reason' => 'connection_lost',
         ])->once();
         Sleep::assertSleptTimes(1);
+    }
+
+    public function test_the_daemon_connects_with_the_configured_connect_timeout(): void
+    {
+        // A string, because that's how an env value always arrives.
+        config(['mqtt.connect_timeout' => '4']);
+
+        $this->runDaemon($this->client());
+
+        // php-mqtt's own default is 60, so 4 can only come from config.
+        $this->assertSame(4, $this->settings->getConnectTimeout());
+    }
+
+    #[DataProvider('readableScannedAtValues')]
+    public function test_scanned_at_is_read_as_epoch_seconds_or_a_date_string(int|string $scannedAt): void
+    {
+        $device = Device::factory()->create(['mode' => DeviceMode::Manual]);
+
+        $client = $this->client(function () use ($device, $scannedAt) {
+            $this->subscriptions['parkir/+/scan']("parkir/{$device->id}/scan", json_encode(['uid' => 'DEADBEEF', 'scanned_at' => $scannedAt]));
+        });
+        $client->shouldReceive('publish')->never();
+
+        $this->runDaemon($client);
+
+        $this->assertSame('2026-10-11 08:31:04', AccessLog::sole()->scanned_at->utc()->toDateTimeString());
+    }
+
+    public static function readableScannedAtValues(): array
+    {
+        return [
+            'epoch seconds as an integer' => [1791707464],
+            'epoch seconds as a string of digits' => ['1791707464'],
+            'ISO-8601' => ['2026-10-11T08:31:04Z'],
+            'ISO-8601 with an offset' => ['2026-10-11T15:31:04+07:00'],
+        ];
+    }
+
+    public function test_an_unreadable_scanned_at_falls_back_to_the_receipt_time(): void
+    {
+        $device = Device::factory()->create(['mode' => DeviceMode::Manual]);
+
+        $client = $this->client(function () use ($device) {
+            // A float epoch isn't accepted: only whole seconds are.
+            $this->subscriptions['parkir/+/scan']("parkir/{$device->id}/scan", json_encode(['uid' => 'DEADBEEF', 'scanned_at' => 1791707464.5]));
+        });
+        $client->shouldReceive('publish')->never();
+
+        $this->runDaemon($client);
+
+        $this->assertSame(now()->toDateTimeString(), AccessLog::sole()->scanned_at->toDateTimeString());
     }
 
     /**

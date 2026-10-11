@@ -1,7 +1,5 @@
 <?php
 
-use Laravel\Fortify\Features;
-
 return [
 
     /*
@@ -161,12 +159,16 @@ return [
     */
 
     'features' => [
-        Features::registration(),
-        Features::resetPasswords(),
-        Features::emailVerification(),
-        // 2FA & passkeys disabled for now — SPA migration is simplified to
-        // email+password auth first; these can be re-added as a follow-up
-        // task once the React SPA + API auth flow is stable.
+        // Every optional feature is off on purpose. Accounts — and their
+        // passwords — are managed only by an admin, on the Manajemen Akun
+        // page (/api/users), never by the public:
+        //  - registration: anyone who signed up became a karyawan, and a
+        //    karyawan may approve opening the gate.
+        //  - resetPasswords: the mail driver is still "log", so no reset
+        //    email would ever reach anyone.
+        //  - emailVerification: nothing in the app needs a verified email.
+        // 2FA & passkeys are deferred, not dropped: they come back as API
+        // endpoints in a follow-up task (see the deferred-security tests).
     ],
 
 ];

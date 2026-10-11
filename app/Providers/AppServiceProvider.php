@@ -38,9 +38,19 @@ class AppServiceProvider extends ServiceProvider
         // The framework's `queue` process only works the default queue (the
         // broadcasts), so device commands need their own worker. queue:work
         // stays booted between jobs and polls every 0.2 s when idle, which
-        // keeps approve-to-device latency low — but it also keeps old code
-        // in memory, so it must be restarted after changing job code.
-        DevCommands::artisan('queue:work --queue='.PublishDeviceCommand::QUEUE.' --sleep=0.2', 'device-commands');
+        // keeps approve-to-device latency low.
+        //
+        // It runs inside a shell loop because `php artisan dev` only restarts
+        // a process that exits non-zero, and this worker never does: after a
+        // job timeout Laravel ends the worker with SIGKILL, and
+        // `php artisan queue:restart` makes it exit 0. Without the loop, one
+        // hung attempt (or one queue:restart) would leave no worker for the
+        // rest of the session; with it, queue:restart is simply how changed
+        // job code gets loaded.
+        DevCommands::register(
+            'while true; do php artisan queue:work --queue='.PublishDeviceCommand::QUEUE.' --sleep=0.2; sleep 1; done',
+            'device-commands',
+        );
 
         DevCommands::artisan('mqtt:listen', 'mqtt');
     }

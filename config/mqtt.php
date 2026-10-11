@@ -50,4 +50,19 @@ return [
 
     'connect_timeout' => env('MQTT_CONNECT_TIMEOUT', 3),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Command Time-To-Live
+    |--------------------------------------------------------------------------
+    |
+    | Seconds after the decision (the command's issued_at) during which an
+    | open/deny command may still be sent. Past that, every sender drops
+    | it instead: a gate opening long after the driver gave up is worse
+    | than a command that never arrives. The ESP32 applies its own,
+    | looser threshold on top of this (see docs/mqtt-topics.md).
+    |
+    */
+
+    'command_ttl' => env('MQTT_COMMAND_TTL', 10),
+
 ];

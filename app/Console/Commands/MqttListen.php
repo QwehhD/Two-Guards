@@ -11,10 +11,12 @@ use App\Mqtt\DeviceCommand;
 use App\Mqtt\StaleDeviceCommandException;
 use App\Services\AccessDecisionService;
 use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use DateTime;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Sleep;
+use InvalidArgumentException;
 use PhpMqtt\Client\ConnectionSettings;
 use PhpMqtt\Client\Contracts\Repository;
 use PhpMqtt\Client\MqttClient as PhpMqttClient;
@@ -113,6 +115,10 @@ class MqttListen extends Command
                     ->setReconnectAutomatically(true)
                     ->setMaxReconnectAttempts(3)
                     ->setDelayBetweenReconnectAttempts(1000)
+                    // Same short connect timeout as MqttPublisherService instead
+                    // of php-mqtt's 60 s default, so an unreachable broker costs
+                    // each of the reconnect attempts above seconds, not minutes.
+                    ->setConnectTimeout((int) config('mqtt.connect_timeout'))
                     ->setResendTimeout((int) config('mqtt.command_ttl') + self::RESEND_MARGIN_SECONDS);
 
                 // A persistent (non-clean) session tied to our stable
@@ -210,9 +216,10 @@ class MqttListen extends Command
 
         if (! empty($payload['scanned_at'])) {
             try {
-                $scannedAt = Carbon::parse($payload['scanned_at']);
+                $scannedAt = $this->parseScannedAt($payload['scanned_at']);
             } catch (Throwable) {
-                $this->logIssue("Could not parse scanned_at [{$payload['scanned_at']}] from device [{$deviceId}]; using server receipt time instead.");
+                $raw = json_encode($payload['scanned_at']);
+                $this->logIssue("Could not parse scanned_at [{$raw}] from device [{$deviceId}]; using server receipt time instead.");
             }
         }
 
@@ -261,6 +268,29 @@ class MqttListen extends Command
                 'message' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * scanned_at as sent by the device: Unix epoch seconds — an integer or a
+     * string of digits, the simplest thing for an ESP32 to send and the same
+     * form as a command's issued_at — or any date string Carbon::parse()
+     * reads, such as ISO-8601.
+     *
+     * Converted to the app timezone before it's stored: the datetime cast
+     * writes the wall-clock time as-is, so "15:31:04+07:00" would otherwise
+     * be saved as 15:31:04 and read back seven hours off.
+     */
+    private function parseScannedAt(mixed $value): CarbonInterface
+    {
+        if (is_int($value) || (is_string($value) && ctype_digit($value))) {
+            $scannedAt = Carbon::createFromTimestamp((int) $value);
+        } elseif (is_string($value)) {
+            $scannedAt = Carbon::parse($value);
+        } else {
+            throw new InvalidArgumentException('scanned_at must be epoch seconds or a date string.');
+        }
+
+        return $scannedAt->setTimezone(config('app.timezone'));
     }
 
     /**

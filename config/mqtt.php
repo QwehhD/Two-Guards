@@ -38,13 +38,14 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Publisher Connect Timeout
+    | Connect Timeout
     |--------------------------------------------------------------------------
     |
-    | Seconds MqttPublisherService waits to connect to the broker before
-    | giving up. Every attempt of the PublishDeviceCommand job has to fit
-    | inside the command's short TTL below, so php-mqtt's own default of
-    | 60 seconds is far too long for it.
+    | Seconds MqttPublisherService and the mqtt:listen daemon wait to
+    | connect to the broker before giving up. Every attempt of the
+    | PublishDeviceCommand job has to fit inside the command's short TTL
+    | below, and every daemon reconnect attempt should fail fast, so
+    | php-mqtt's own default of 60 seconds is far too long for both.
     |
     */
 

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\UserRole;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class UserManagementTest extends TestCase
@@ -82,6 +83,61 @@ class UserManagementTest extends TestCase
             'id' => $target->id,
             'name' => 'Updated Name',
         ]);
+    }
+
+    public function test_admin_can_change_a_karyawan_password(): void
+    {
+        $admin = User::factory()->create(['role' => UserRole::Admin]);
+        $target = User::factory()->create(['role' => UserRole::Karyawan]);
+
+        // What the Manajemen Akun page sends: the account's current name,
+        // email and role, plus the new password and its confirmation.
+        $response = $this->actingAs($admin)->putJson("/api/users/{$target->id}", [
+            'name' => $target->name,
+            'email' => $target->email,
+            'role' => UserRole::Karyawan->value,
+            'password' => 'password-baru-123',
+            'password_confirmation' => 'password-baru-123',
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonMissingPath('password');
+        $this->assertTrue(Hash::check('password-baru-123', $target->fresh()->password));
+        $this->assertDatabaseHas('users', ['id' => $target->id, 'role' => UserRole::Karyawan->value]);
+    }
+
+    public function test_a_new_password_must_be_confirmed(): void
+    {
+        $admin = User::factory()->create(['role' => UserRole::Admin]);
+        $target = User::factory()->create(['role' => UserRole::Karyawan]);
+        $before = $target->password;
+
+        $response = $this->actingAs($admin)->putJson("/api/users/{$target->id}", [
+            'name' => $target->name,
+            'email' => $target->email,
+            'role' => UserRole::Karyawan->value,
+            'password' => 'password-baru-123',
+            'password_confirmation' => 'salah-ketik-123',
+        ]);
+
+        $response->assertUnprocessable();
+        $response->assertJsonValidationErrors('password');
+        $this->assertSame($before, $target->fresh()->password);
+    }
+
+    public function test_updating_without_a_password_keeps_the_current_one(): void
+    {
+        $admin = User::factory()->create(['role' => UserRole::Admin]);
+        $target = User::factory()->create(['role' => UserRole::Karyawan]);
+        $before = $target->password;
+
+        $this->actingAs($admin)->putJson("/api/users/{$target->id}", [
+            'name' => 'Nama Baru',
+            'email' => $target->email,
+            'role' => UserRole::Karyawan->value,
+        ])->assertOk();
+
+        $this->assertSame($before, $target->fresh()->password);
     }
 
     public function test_karyawan_cannot_update_a_user(): void

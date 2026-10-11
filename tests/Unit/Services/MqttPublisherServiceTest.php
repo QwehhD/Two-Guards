@@ -120,6 +120,30 @@ class MqttPublisherServiceTest extends TestCase
 
     public function test_blank_configured_credentials_are_passed_as_null(): void
     {
+        $settings = $this->publishAndCaptureConnectionSettings();
+
+        $this->assertNull($settings->getUsername());
+        $this->assertNull($settings->getPassword());
+    }
+
+    public function test_connect_timeout_is_read_from_config_instead_of_the_library_default(): void
+    {
+        // A string, because that's how an env value always arrives —
+        // this also proves the service casts it for ConnectionSettings.
+        config(['mqtt.connect_timeout' => '7']);
+
+        $settings = $this->publishAndCaptureConnectionSettings();
+
+        // php-mqtt's own default is 60, so 7 can only come from config.
+        $this->assertSame(7, $settings->getConnectTimeout());
+    }
+
+    /**
+     * Publishes one command through a mocked client and returns the
+     * ConnectionSettings the service passed to connect().
+     */
+    private function publishAndCaptureConnectionSettings(): ConnectionSettings
+    {
         $capturedSettings = null;
 
         $client = Mockery::mock(MqttClient::class);
@@ -135,7 +159,8 @@ class MqttPublisherServiceTest extends TestCase
 
         $service->publishCommand(1, 'open');
 
-        $this->assertNull($capturedSettings->getUsername());
-        $this->assertNull($capturedSettings->getPassword());
+        $this->assertInstanceOf(ConnectionSettings::class, $capturedSettings);
+
+        return $capturedSettings;
     }
 }

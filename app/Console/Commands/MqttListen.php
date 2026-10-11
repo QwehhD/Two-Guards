@@ -8,14 +8,18 @@ use App\Enums\PortalStatus;
 use App\Events\PortalStatusUpdated;
 use App\Models\Device;
 use App\Mqtt\DeviceCommand;
+use App\Mqtt\StaleDeviceCommandException;
 use App\Services\AccessDecisionService;
-use App\Services\MqttPublisherService;
 use Carbon\Carbon;
+use DateTime;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Sleep;
 use PhpMqtt\Client\ConnectionSettings;
-use PhpMqtt\Client\Contracts\MqttClient;
+use PhpMqtt\Client\Contracts\Repository;
 use PhpMqtt\Client\MqttClient as PhpMqttClient;
+use PhpMqtt\Client\PublishedMessage;
+use PhpMqtt\Client\Repositories\MemoryRepository;
 use Throwable;
 
 /**
@@ -24,9 +28,12 @@ use Throwable;
  * calls the exact same AccessDecisionService::decide() the development-only
  * simulate-scan HTTP endpoint (Tahap 6) calls, so the auto/manual decision
  * logic lives in exactly one place regardless of which trigger fired it.
+ * Auto-mode commands go back out on this daemon's own connection; manual
+ * decisions are sent by the queued PublishDeviceCommand job instead.
  *
- * Run as its own long-lived process (`php artisan mqtt:listen`), separate
- * from `php artisan serve`, `npm run dev`, and `php artisan reverb:start`.
+ * Runs as its own long-lived process (`php artisan mqtt:listen`), which
+ * `php artisan dev` starts alongside serve, the queue workers, Vite and
+ * Reverb (see docs/mqtt-topics.md for the topics it speaks).
  */
 class MqttListen extends Command
 {
@@ -40,7 +47,24 @@ class MqttListen extends Command
 
     private const RECONNECT_DELAY_SECONDS = 5;
 
-    public function handle(AccessDecisionService $decisions, MqttPublisherService $publisher): int
+    /**
+     * php-mqtt resends a QoS 1 message that got no PUBACK once it was last
+     * sent longer ago than its resend timeout. That timeout is set to the
+     * command TTL plus this margin, so every command goes stale — and is
+     * dropped by dropUnacknowledgedCommands() — well before it could ever
+     * qualify for a resend.
+     */
+    private const RESEND_MARGIN_SECONDS = 10;
+
+    /**
+     * @param  (callable(string $clientId, Repository $repository): PhpMqttClient)|null  $clientFactory  Overridable so tests can inject a mock instead of opening a real socket. The client must track its unacknowledged messages in the given repository.
+     */
+    public function __construct(private readonly mixed $clientFactory = null)
+    {
+        parent::__construct();
+    }
+
+    public function handle(AccessDecisionService $decisions): int
     {
         $clientId = config('mqtt.client_id_prefix').'-listener';
         $mqtt = null;
@@ -66,8 +90,21 @@ class MqttListen extends Command
         // logged and retried after a short delay — the daemon process
         // itself never exits because the broker was unreachable.
         while (true) {
+            // php-mqtt keeps every QoS 1 command this daemon publishes in this
+            // repository until its PUBACK arrives, which is how
+            // dropUnacknowledgedCommands() finds the ones that never got one.
+            $repository = new MemoryRepository;
+
             try {
-                $mqtt = new PhpMqttClient(config('mqtt.host'), (int) config('mqtt.port'), $clientId);
+                $mqtt = $this->makeClient($clientId, $repository);
+
+                // Drop stale unacknowledged commands at the start of every loop
+                // iteration and right after every (re)connect — together with
+                // the end of each message handler below, that always comes
+                // before php-mqtt's resend step (see dropUnacknowledgedCommands).
+                $dropStaleCommands = fn () => $this->dropUnacknowledgedCommands($repository, staleOnly: true);
+                $mqtt->registerLoopEventHandler($dropStaleCommands);
+                $mqtt->registerConnectedEventHandler($dropStaleCommands);
 
                 $settings = (new ConnectionSettings)
                     ->setUsername(config('mqtt.username') ?: null)
@@ -75,7 +112,8 @@ class MqttListen extends Command
                     ->setKeepAliveInterval(10)
                     ->setReconnectAutomatically(true)
                     ->setMaxReconnectAttempts(3)
-                    ->setDelayBetweenReconnectAttempts(1000);
+                    ->setDelayBetweenReconnectAttempts(1000)
+                    ->setResendTimeout((int) config('mqtt.command_ttl') + self::RESEND_MARGIN_SECONDS);
 
                 // A persistent (non-clean) session tied to our stable
                 // client ID, so the broker retains our subscriptions
@@ -86,12 +124,18 @@ class MqttListen extends Command
 
                 $mqtt->subscribe(
                     self::SCAN_TOPIC,
-                    fn (string $topic, string $message) => $this->handleScan($topic, $message, $decisions, $publisher),
+                    function (string $topic, string $message) use ($decisions, $mqtt, $dropStaleCommands): void {
+                        $this->handleScan($topic, $message, $decisions, $mqtt);
+                        $dropStaleCommands();
+                    },
                     1,
                 );
                 $mqtt->subscribe(
                     self::STATUS_TOPIC,
-                    fn (string $topic, string $message) => $this->handleStatus($topic, $message),
+                    function (string $topic, string $message) use ($dropStaleCommands): void {
+                        $this->handleStatus($topic, $message);
+                        $dropStaleCommands();
+                    },
                     1,
                 );
 
@@ -113,13 +157,19 @@ class MqttListen extends Command
                     'message' => $e->getMessage(),
                 ]);
 
+                // This client and its repository are replaced on the next
+                // attempt, so nothing still waiting for a PUBACK can ever be
+                // acknowledged or resent now — log each one instead of losing
+                // it quietly.
+                $this->dropUnacknowledgedCommands($repository, staleOnly: false);
+
                 try {
                     $mqtt?->disconnect();
                 } catch (Throwable) {
                     // The socket is already dead; nothing to clean up.
                 }
 
-                sleep(self::RECONNECT_DELAY_SECONDS);
+                Sleep::for(self::RECONNECT_DELAY_SECONDS)->seconds();
             }
         }
     }
@@ -128,11 +178,11 @@ class MqttListen extends Command
      * parkir/{device_id}/scan handler: records the scan via the shared
      * AccessDecisionService and, if the decision was immediate (auto
      * mode), publishes the open/deny command back to the device right
-     * away. A pending (manual mode) decision publishes nothing here —
-     * the eventual command is sent by the approve/reject endpoint once
-     * a human decides.
+     * away, on this daemon's own connection. A pending (manual mode)
+     * decision publishes nothing here — the eventual command is sent by
+     * the PublishDeviceCommand job once a human approves or rejects it.
      */
-    private function handleScan(string $topic, string $message, AccessDecisionService $decisions, MqttPublisherService $publisher): void
+    private function handleScan(string $topic, string $message, AccessDecisionService $decisions, PhpMqttClient $mqtt): void
     {
         $deviceId = $this->extractDeviceId($topic, 'scan');
 
@@ -187,7 +237,18 @@ class MqttListen extends Command
         $action = $command->action->value;
 
         try {
-            $publisher->publish($command);
+            // Recording the decision may have waited on a database lock, so
+            // the same never-send-stale rule as the queued job applies here.
+            if ($command->isStale()) {
+                throw StaleDeviceCommandException::for($command);
+            }
+
+            // Sent on this daemon's own persistent connection: no queue hop
+            // (latency) and no fresh connection per scan (no CONNACK wait in
+            // the scan path). The QoS 1 PUBACK is handled by the loop() that
+            // is already running; see dropUnacknowledgedCommands() for what
+            // happens when it never comes.
+            $mqtt->publish($command->topic(), $command->payload(), 1);
         } catch (Throwable $e) {
             // Same structured context as AccessLogController::resolve()'s
             // publish failure, so both paths can be traced the same way.
@@ -200,6 +261,63 @@ class MqttListen extends Command
                 'message' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Takes unacknowledged commands out of php-mqtt's resend queue and logs
+     * each one, so an auto-mode command is either acknowledged within its
+     * TTL or visibly given up on — never resent late.
+     *
+     * Why a stale command can't slip through to a resend: php-mqtt resends
+     * only from resendPendingMessages(), near the end of each loop
+     * iteration, and only messages last sent longer ago than the resend
+     * timeout (TTL + RESEND_MARGIN_SECONDS). A command is first sent after
+     * its decision (issued_at), so it goes stale at least that margin
+     * before it could qualify. This method runs at the start of every loop
+     * iteration, after every (re)connect — including php-mqtt's own
+     * auto-reconnect, which can happen mid-iteration — and at the end of
+     * every message handler. Between the last of those and the resend step
+     * only php-mqtt's own bookkeeping runs (parsing acks, pings), which
+     * takes microseconds, not the 10 s margin.
+     *
+     * @param  bool  $staleOnly  false drops every pending command, for when the connection itself is gone
+     */
+    private function dropUnacknowledgedCommands(Repository $repository, bool $staleOnly): void
+    {
+        // The repository has no "all pending" getter; "last sent before a
+        // moment in the future" is every pending message.
+        foreach ($repository->getPendingOutgoingMessagesLastSentBefore(new DateTime('+1 day')) as $pending) {
+            if (! $pending instanceof PublishedMessage) {
+                continue;
+            }
+
+            $command = DeviceCommand::fromMessage($pending->getTopicName(), $pending->getMessage());
+
+            if ($command === null || ($staleOnly && ! $command->isStale())) {
+                continue;
+            }
+
+            $repository->removePendingOutgoingMessage($pending->getMessageId());
+
+            $reason = $staleOnly ? 'stale' : 'connection_lost';
+            $this->error("mqtt:listen: Dropped unacknowledged [{$command->action->value}] command to device [{$command->deviceId}] for access log [{$command->accessLogId}] ({$reason}).");
+            Log::error('mqtt:listen: broker never acknowledged a device command; dropped instead of resending.', [
+                'access_log_id' => $command->accessLogId,
+                'device_id' => $command->deviceId,
+                'action' => $command->action->value,
+                'issued_at' => $command->issuedAt,
+                'reason' => $reason,
+            ]);
+        }
+    }
+
+    private function makeClient(string $clientId, Repository $repository): PhpMqttClient
+    {
+        if ($this->clientFactory !== null) {
+            return ($this->clientFactory)($clientId, $repository);
+        }
+
+        return new PhpMqttClient(config('mqtt.host'), (int) config('mqtt.port'), $clientId, repository: $repository);
     }
 
     /**

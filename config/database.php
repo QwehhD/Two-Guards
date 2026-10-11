@@ -45,7 +45,14 @@ return [
             'busy_timeout' => env('DB_BUSY_TIMEOUT', 5000),
             'journal_mode' => env('DB_JOURNAL_MODE', 'wal'),
             'synchronous' => null,
-            'transaction_mode' => 'DEFERRED',
+            // The busy timeout alone isn't enough under WAL: a DEFERRED
+            // transaction starts as a reader, and if another process has
+            // written since, its first write fails "database is locked"
+            // immediately — no waiting. The database queue's pop() is exactly
+            // that read-then-write, and Laravel then fails the job it was
+            // reserving. IMMEDIATE takes the write lock at BEGIN, where the
+            // busy timeout does apply. (Honoured on PHP 8.4+ only.)
+            'transaction_mode' => env('DB_TRANSACTION_MODE', 'IMMEDIATE'),
         ],
 
         'mysql' => [

@@ -6,3 +6,4 @@ export type * from './portal-status';
 export type * from './public-access-log';
 export type * from './rfid-card';
 export type * from './ui';
+export type * from './user-management';

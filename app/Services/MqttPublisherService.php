@@ -41,9 +41,15 @@ class MqttPublisherService
         $clientId = config('mqtt.client_id_prefix').'-publisher-'.Str::random(8);
         $client = $this->makeClient($clientId);
 
+        // The connect timeout replaces php-mqtt's 60-second default so an
+        // unreachable broker fails fast instead of stalling the approve/
+        // reject request. It covers the TCP connect, but not a broker that
+        // accepts the socket and then never answers the MQTT handshake:
+        // php-mqtt waits for the first CONNACK byte without any deadline.
         $settings = (new ConnectionSettings)
             ->setUsername(config('mqtt.username') ?: null)
-            ->setPassword(config('mqtt.password') ?: null);
+            ->setPassword(config('mqtt.password') ?: null)
+            ->setConnectTimeout((int) config('mqtt.connect_timeout'));
 
         // A clean session (2nd arg) is appropriate here: this client never
         // subscribes to anything and disconnects immediately after, so

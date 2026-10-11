@@ -36,4 +36,18 @@ return [
 
     'client_id_prefix' => env('MQTT_CLIENT_ID_PREFIX', 'two-guards'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Publisher Connect Timeout
+    |--------------------------------------------------------------------------
+    |
+    | Seconds MqttPublisherService waits to connect to the broker before
+    | giving up. It runs inside the approve/reject HTTP request, so this
+    | is how long a user is left waiting when the broker is unreachable —
+    | php-mqtt's own default of 60 seconds is far too long for that.
+    |
+    */
+
+    'connect_timeout' => env('MQTT_CONNECT_TIMEOUT', 3),
+
 ];

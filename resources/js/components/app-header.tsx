@@ -1,4 +1,4 @@
-import { History, LayoutGrid, Menu, ShieldCheck } from 'lucide-react';
+import { History, LayoutGrid, Menu, ShieldCheck, UserCog } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import AppLogo from '@/components/app-logo';
 import AppLogoIcon from '@/components/app-logo-icon';
@@ -52,6 +52,15 @@ const mainNavItems: NavItem[] = [
     },
 ];
 
+// Admin-only, like the /users route and /api/users behind it.
+const adminNavItems: NavItem[] = [
+    {
+        title: 'Akun',
+        href: '/users',
+        icon: UserCog,
+    },
+];
+
 const activeItemStyles =
     'text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100';
 
@@ -59,6 +68,7 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
     const user = useAuthStore((state) => state.user);
     const getInitials = useInitials();
     const { isCurrentUrl, whenCurrentUrl } = useCurrentUrl();
+    const navItems = user?.role === 'admin' ? [...mainNavItems, ...adminNavItems] : mainNavItems;
 
     return (
         <>
@@ -88,7 +98,7 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                                 </SheetHeader>
                                 <div className="flex h-full flex-1 flex-col space-y-4 p-4">
                                     <div className="flex flex-col space-y-4 text-sm">
-                                        {mainNavItems.map((item) => (
+                                        {navItems.map((item) => (
                                             <Link
                                                 key={item.title}
                                                 to={item.href}
@@ -114,7 +124,7 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                     <div className="ml-6 hidden h-full items-center space-x-6 lg:flex">
                         <NavigationMenu className="flex h-full items-stretch">
                             <NavigationMenuList className="flex h-full items-stretch space-x-2">
-                                {mainNavItems.map((item, index) => (
+                                {navItems.map((item, index) => (
                                     <NavigationMenuItem
                                         key={index}
                                         className="relative flex h-full items-center"

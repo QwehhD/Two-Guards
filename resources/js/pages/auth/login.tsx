@@ -3,7 +3,6 @@ import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
-import TextLink from '@/components/text-link';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -63,12 +62,7 @@ export default function Login() {
                 </div>
 
                 <div className="grid gap-2">
-                    <div className="flex items-center">
-                        <Label htmlFor="password">Password</Label>
-                        <TextLink to="/forgot-password" className="ml-auto text-sm" tabIndex={5}>
-                            Forgot your password?
-                        </TextLink>
-                    </div>
+                    <Label htmlFor="password">Password</Label>
                     <PasswordInput
                         id="password"
                         required
@@ -103,11 +97,10 @@ export default function Login() {
                 </Button>
             </div>
 
+            {/* No sign-up or forgot-password links: accounts and password
+                resets are handled by an admin on the Manajemen Akun page. */}
             <div className="text-muted-foreground text-center text-sm">
-                Don't have an account?{' '}
-                <TextLink to="/register" tabIndex={5}>
-                    Sign up
-                </TextLink>
+                Accounts are created by an admin. Forgot your password? Ask an admin to reset it.
             </div>
         </form>
     );

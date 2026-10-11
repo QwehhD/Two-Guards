@@ -6,15 +6,12 @@ import AuthLayout from '@/layouts/auth-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 import AccessLogs from '@/pages/access-logs';
 import Approvals from '@/pages/approvals';
-import ForgotPassword from '@/pages/auth/forgot-password';
 import Login from '@/pages/auth/login';
-import Register from '@/pages/auth/register';
-import ResetPassword from '@/pages/auth/reset-password';
-import VerifyEmail from '@/pages/auth/verify-email';
 import Dashboard from '@/pages/dashboard';
 import Landing from '@/pages/Landing';
 import Appearance from '@/pages/settings/appearance';
 import Profile from '@/pages/settings/profile';
+import Users from '@/pages/users';
 import { useAuthStore } from '@/store/auth';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -26,6 +23,21 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
 
     if (status === 'guest') {
         return <Navigate to="/login" replace />;
+    }
+
+    return <>{children}</>;
+}
+
+/**
+ * Only for pages inside ProtectedRoute, where the user is already loaded.
+ * The API enforces the same rule; this just keeps karyawan off a page whose
+ * every request would be refused.
+ */
+function AdminRoute({ children }: { children: ReactNode }) {
+    const user = useAuthStore((state) => state.user);
+
+    if (user?.role !== 'admin') {
+        return <Navigate to="/dashboard" replace />;
     }
 
     return <>{children}</>;
@@ -67,59 +79,6 @@ export default function App() {
                     </GuestOnlyRoute>
                 }
             />
-            <Route
-                path="/register"
-                element={
-                    <GuestOnlyRoute>
-                        <AuthLayout
-                            title="Create an account"
-                            description="Enter your details below to create your account"
-                        >
-                            <Register />
-                        </AuthLayout>
-                    </GuestOnlyRoute>
-                }
-            />
-            <Route
-                path="/forgot-password"
-                element={
-                    <GuestOnlyRoute>
-                        <AuthLayout
-                            title="Forgot password"
-                            description="Enter your email to receive a password reset link"
-                        >
-                            <ForgotPassword />
-                        </AuthLayout>
-                    </GuestOnlyRoute>
-                }
-            />
-            <Route
-                path="/reset-password/:token"
-                element={
-                    <GuestOnlyRoute>
-                        <AuthLayout
-                            title="Reset password"
-                            description="Please enter your new password below"
-                        >
-                            <ResetPassword />
-                        </AuthLayout>
-                    </GuestOnlyRoute>
-                }
-            />
-            <Route
-                path="/verify-email"
-                element={
-                    <ProtectedRoute>
-                        <AuthLayout
-                            title="Email verification"
-                            description="Please verify your email address by clicking on the link we just emailed to you."
-                        >
-                            <VerifyEmail />
-                        </AuthLayout>
-                    </ProtectedRoute>
-                }
-            />
-
             {/*
                 Public landing page (Tahap 7) — the only route in the app
                 that is intentionally left unwrapped by ProtectedRoute or
@@ -154,6 +113,18 @@ export default function App() {
                         <AppLayout breadcrumbs={[{ title: 'Persetujuan Manual', href: '/approvals' }]}>
                             <Approvals />
                         </AppLayout>
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/users"
+                element={
+                    <ProtectedRoute>
+                        <AdminRoute>
+                            <AppLayout breadcrumbs={[{ title: 'Manajemen Akun', href: '/users' }]}>
+                                <Users />
+                            </AppLayout>
+                        </AdminRoute>
                     </ProtectedRoute>
                 }
             />

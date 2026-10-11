@@ -38,10 +38,6 @@ export default function Profile() {
         }
     };
 
-    const handleResendVerification = async () => {
-        await api.post('/email/verification-notification');
-    };
-
     return (
         <>
             <h1 className="sr-only">Profile settings</h1>
@@ -86,21 +82,6 @@ export default function Profile() {
 
                         <InputError className="mt-2" message={errors.email?.[0]} />
                     </div>
-
-                    {user && user.email_verified_at === null && (
-                        <div>
-                            <p className="text-muted-foreground -mt-4 text-sm">
-                                Your email address is unverified.{' '}
-                                <button
-                                    type="button"
-                                    onClick={handleResendVerification}
-                                    className="text-foreground underline decoration-neutral-300 underline-offset-4 transition-colors duration-300 ease-out hover:decoration-current! dark:decoration-neutral-500"
-                                >
-                                    Click here to re-send the verification email.
-                                </button>
-                            </p>
-                        </div>
-                    )}
 
                     <div className="flex items-center gap-4">
                         <Button disabled={processing} data-test="update-profile-button">

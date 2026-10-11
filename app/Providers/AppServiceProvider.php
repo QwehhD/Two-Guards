@@ -30,11 +30,17 @@ class AppServiceProvider extends ServiceProvider
     }
 
     /**
-     * Extra processes for `php artisan dev` (`composer dev`), next to the
-     * framework's serve/queue/logs/vite and Reverb's own reverb:start.
+     * Processes for `php artisan dev` (`composer dev`) on top of, or in place
+     * of, the framework's serve/queue/logs/vite and Reverb's reverb:start.
      */
     protected function configureDevCommands(): void
     {
+        // Replaces the framework's own `queue` process (same name, and app
+        // registrations win), only adding --sleep=0.2: the broadcasts that put
+        // a new pending scan on the Approvals page would otherwise wait up to
+        // 3 s for the idle listener to poll again, out of a 30 s window.
+        DevCommands::artisan('queue:listen --tries=1 --timeout=0 --sleep=0.2', 'queue');
+
         // The framework's `queue` process only works the default queue (the
         // broadcasts), so device commands need their own worker. queue:work
         // stays booted between jobs and polls every 0.2 s when idle, which
@@ -53,6 +59,9 @@ class AppServiceProvider extends ServiceProvider
         );
 
         DevCommands::artisan('mqtt:listen', 'mqtt');
+
+        // Runs the scheduled tasks in routes/console.php (access-logs:expire-pending).
+        DevCommands::artisan('schedule:work', 'schedule');
     }
 
     /**

@@ -11,3 +11,8 @@ parameters:
         - routes/
 
     level: 7
+
+    # Read the literal array returned by each model's casts() method, so
+    # enum/datetime casts are known instead of falling back to the raw
+    # column types from the migrations (e.g. status as plain string).
+    parseModelCastsMethod: true

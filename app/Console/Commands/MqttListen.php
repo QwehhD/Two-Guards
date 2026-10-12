@@ -59,6 +59,12 @@ class MqttListen extends Command
     private const RESEND_MARGIN_SECONDS = 10;
 
     /**
+     * Set by the SIGINT/SIGTERM handler; the retry loop checks it at every
+     * step, so a shutdown signal is honoured even while the broker is down.
+     */
+    private bool $stopRequested = false;
+
+    /**
      * @param  (callable(string $clientId, Repository $repository): PhpMqttClient)|null  $clientFactory  Overridable so tests can inject a mock instead of opening a real socket. The client must track its unacknowledged messages in the given repository.
      */
     public function __construct(private readonly mixed $clientFactory = null)
@@ -70,14 +76,28 @@ class MqttListen extends Command
     {
         $clientId = config('mqtt.client_id_prefix').'-listener';
         $mqtt = null;
+        $this->stopRequested = false;
 
-        // Lets `Ctrl+C` (or a `kill`, e.g. from a process manager) stop the
-        // loop cleanly via MqttClient::interrupt() instead of the process
-        // being killed mid-socket-operation. $mqtt is captured by
-        // reference because it's replaced on every reconnect below.
+        // Ctrl+C (SIGINT) or a kill / process manager (SIGTERM) stops the
+        // daemon cleanly from any state: inside loop() via
+        // MqttClient::interrupt(), and between reconnect attempts via
+        // $stopRequested, which every step of the retry loop below checks
+        // (the signal also cuts the reconnect wait short). $mqtt is captured
+        // by reference because it's replaced on every reconnect below.
         if (function_exists('pcntl_async_signals')) {
             pcntl_async_signals(true);
             $shutdown = function () use (&$mqtt): void {
+                // A second signal exits at once. The one state the first
+                // can't end is a broker that accepted the socket but never
+                // answers the MQTT handshake: php-mqtt waits for its CONNACK
+                // without a deadline.
+                if ($this->stopRequested) {
+                    $this->warn('mqtt:listen: second shutdown signal, exiting immediately.');
+
+                    exit(self::FAILURE);
+                }
+
+                $this->stopRequested = true;
                 $this->info('mqtt:listen: shutdown signal received, disconnecting...');
                 $mqtt?->interrupt();
             };
@@ -85,98 +105,137 @@ class MqttListen extends Command
             pcntl_signal(SIGTERM, $shutdown);
         }
 
-        // Outer retry loop: on top of the MQTT client's own
-        // setReconnectAutomatically() (which recovers from brief
-        // transport hiccups mid-operation), this makes sure that even a
-        // broker outage long enough to exhaust that budget just gets
-        // logged and retried after a short delay — the daemon process
-        // itself never exits because the broker was unreachable.
-        while (true) {
-            // php-mqtt keeps every QoS 1 command this daemon publishes in this
-            // repository until its PUBACK arrives, which is how
-            // dropUnacknowledgedCommands() finds the ones that never got one.
-            $repository = new MemoryRepository;
-
-            try {
-                $mqtt = $this->makeClient($clientId, $repository);
-
-                // Drop stale unacknowledged commands at the start of every loop
-                // iteration and right after every (re)connect — together with
-                // the end of each message handler below, that always comes
-                // before php-mqtt's resend step (see dropUnacknowledgedCommands).
-                $dropStaleCommands = fn () => $this->dropUnacknowledgedCommands($repository, staleOnly: true);
-                $mqtt->registerLoopEventHandler($dropStaleCommands);
-                $mqtt->registerConnectedEventHandler($dropStaleCommands);
-
-                $settings = (new ConnectionSettings)
-                    ->setUsername(config('mqtt.username') ?: null)
-                    ->setPassword(config('mqtt.password') ?: null)
-                    ->setKeepAliveInterval(10)
-                    ->setReconnectAutomatically(true)
-                    ->setMaxReconnectAttempts(3)
-                    ->setDelayBetweenReconnectAttempts(1000)
-                    // Same short connect timeout as MqttPublisherService instead
-                    // of php-mqtt's 60 s default, so an unreachable broker costs
-                    // each of the reconnect attempts above seconds, not minutes.
-                    ->setConnectTimeout((int) config('mqtt.connect_timeout'))
-                    ->setResendTimeout((int) config('mqtt.command_ttl') + self::RESEND_MARGIN_SECONDS);
-
-                // A persistent (non-clean) session tied to our stable
-                // client ID, so the broker retains our subscriptions
-                // across a brief reconnect without us resubscribing.
-                $mqtt->connect($settings, false);
-
-                $this->info('mqtt:listen: connected to '.config('mqtt.host').':'.config('mqtt.port')." as [{$clientId}].");
-
-                $mqtt->subscribe(
-                    self::SCAN_TOPIC,
-                    function (string $topic, string $message) use ($decisions, $mqtt, $dropStaleCommands): void {
-                        $this->handleScan($topic, $message, $decisions, $mqtt);
-                        $dropStaleCommands();
-                    },
-                    1,
-                );
-                $mqtt->subscribe(
-                    self::STATUS_TOPIC,
-                    function (string $topic, string $message) use ($dropStaleCommands): void {
-                        $this->handleStatus($topic, $message);
-                        $dropStaleCommands();
-                    },
-                    1,
-                );
-
-                $this->info('mqtt:listen: subscribed to '.self::SCAN_TOPIC.' and '.self::STATUS_TOPIC.'. Listening...');
-
-                $mqtt->loop(true);
-
-                // loop() only returns normally after interrupt() (a
-                // graceful Ctrl+C/SIGTERM shutdown above) — any broker
-                // failure escapes as an exception into the catch below.
-                $this->info('mqtt:listen: stopped.');
-
-                return self::SUCCESS;
-            } catch (Throwable $e) {
-                $exceptionClass = $e::class;
-                $this->error("mqtt:listen: broker connection lost or failed ({$exceptionClass}): {$e->getMessage()}");
-                Log::error('mqtt:listen: broker connection lost or failed, reconnecting shortly.', [
-                    'exception' => $exceptionClass,
-                    'message' => $e->getMessage(),
-                ]);
-
-                // This client and its repository are replaced on the next
-                // attempt, so nothing still waiting for a PUBACK can ever be
-                // acknowledged or resent now — log each one instead of losing
-                // it quietly.
-                $this->dropUnacknowledgedCommands($repository, staleOnly: false);
+        try {
+            // Outer retry loop: on top of the MQTT client's own
+            // setReconnectAutomatically() (which recovers from brief
+            // transport hiccups mid-operation), this makes sure that even a
+            // broker outage long enough to exhaust that budget just gets
+            // logged and retried after a short delay — the daemon process
+            // itself never exits because the broker was unreachable, only
+            // when it's told to stop.
+            while (! $this->stopRequested) {
+                // php-mqtt keeps every QoS 1 command this daemon publishes in this
+                // repository until its PUBACK arrives, which is how
+                // dropUnacknowledgedCommands() finds the ones that never got one.
+                $repository = new MemoryRepository;
 
                 try {
-                    $mqtt?->disconnect();
-                } catch (Throwable) {
-                    // The socket is already dead; nothing to clean up.
-                }
+                    $mqtt = $this->makeClient($clientId, $repository);
 
-                Sleep::for(self::RECONNECT_DELAY_SECONDS)->seconds();
+                    // Drop stale unacknowledged commands at the start of every loop
+                    // iteration and right after every (re)connect — together with
+                    // the end of each message handler below, that always comes
+                    // before php-mqtt's resend step (see dropUnacknowledgedCommands).
+                    $dropStaleCommands = fn () => $this->dropUnacknowledgedCommands($repository, 'stale');
+                    $mqtt->registerLoopEventHandler($dropStaleCommands);
+                    $mqtt->registerConnectedEventHandler($dropStaleCommands);
+
+                    $settings = (new ConnectionSettings)
+                        ->setUsername(config('mqtt.username') ?: null)
+                        ->setPassword(config('mqtt.password') ?: null)
+                        ->setKeepAliveInterval(10)
+                        ->setReconnectAutomatically(true)
+                        ->setMaxReconnectAttempts(3)
+                        ->setDelayBetweenReconnectAttempts(1000)
+                        // Same short connect timeout as MqttPublisherService instead
+                        // of php-mqtt's 60 s default, so an unreachable broker costs
+                        // each of the reconnect attempts above seconds, not minutes.
+                        ->setConnectTimeout((int) config('mqtt.connect_timeout'))
+                        ->setResendTimeout((int) config('mqtt.command_ttl') + self::RESEND_MARGIN_SECONDS);
+
+                    // A persistent (non-clean) session tied to our stable
+                    // client ID, so the broker retains our subscriptions
+                    // across a brief reconnect without us resubscribing.
+                    $mqtt->connect($settings, false);
+
+                    // Told to stop while connecting: the connection is up by
+                    // now, so close it properly rather than start listening.
+                    if ($this->stopRequested) {
+                        $this->disconnectQuietly($mqtt);
+
+                        break;
+                    }
+
+                    $this->info('mqtt:listen: connected to '.config('mqtt.host').':'.config('mqtt.port')." as [{$clientId}].");
+
+                    $mqtt->subscribe(
+                        self::SCAN_TOPIC,
+                        function (string $topic, string $message) use ($decisions, $mqtt, $dropStaleCommands): void {
+                            $this->handleScan($topic, $message, $decisions, $mqtt);
+                            $dropStaleCommands();
+                        },
+                        1,
+                    );
+                    $mqtt->subscribe(
+                        self::STATUS_TOPIC,
+                        function (string $topic, string $message) use ($dropStaleCommands): void {
+                            $this->handleStatus($topic, $message);
+                            $dropStaleCommands();
+                        },
+                        1,
+                    );
+
+                    $this->info('mqtt:listen: subscribed to '.self::SCAN_TOPIC.' and '.self::STATUS_TOPIC.'. Listening...');
+
+                    $mqtt->loop(true);
+
+                    // loop() only returns normally after interrupt(), i.e. a
+                    // shutdown signal — any broker failure escapes as an
+                    // exception into the catch below. Nothing still waiting
+                    // for a PUBACK can be resent after this, so log it, then
+                    // say goodbye to the broker.
+                    $this->dropUnacknowledgedCommands($repository, 'shutdown');
+                    $this->disconnectQuietly($mqtt);
+
+                    break;
+                } catch (Throwable $e) {
+                    // Whatever failed, it failed while shutting down: stop
+                    // instead of reconnecting.
+                    if ($this->stopRequested) {
+                        $this->dropUnacknowledgedCommands($repository, 'shutdown');
+                        $this->disconnectQuietly($mqtt);
+
+                        break;
+                    }
+
+                    $exceptionClass = $e::class;
+                    $this->error("mqtt:listen: broker connection lost or failed ({$exceptionClass}): {$e->getMessage()}");
+                    Log::error('mqtt:listen: broker connection lost or failed, reconnecting shortly.', [
+                        'exception' => $exceptionClass,
+                        'message' => $e->getMessage(),
+                    ]);
+
+                    // This client and its repository are replaced on the next
+                    // attempt, so nothing still waiting for a PUBACK can ever be
+                    // acknowledged or resent now — log each one instead of losing
+                    // it quietly.
+                    $this->dropUnacknowledgedCommands($repository, 'connection_lost');
+                    $this->disconnectQuietly($mqtt);
+
+                    // A shutdown signal cuts this wait short (sleep() returns
+                    // early), and the loop condition then stops the daemon.
+                    Sleep::for(self::RECONNECT_DELAY_SECONDS)->seconds();
+                }
             }
+        } finally {
+            // Hand the signals back to PHP's defaults once the daemon is done.
+            if (function_exists('pcntl_signal')) {
+                pcntl_signal(SIGINT, SIG_DFL);
+                pcntl_signal(SIGTERM, SIG_DFL);
+            }
+        }
+
+        $this->info('mqtt:listen: stopped.');
+
+        return self::SUCCESS;
+    }
+
+    private function disconnectQuietly(?PhpMqttClient $mqtt): void
+    {
+        try {
+            $mqtt?->disconnect();
+        } catch (Throwable) {
+            // The socket is already dead (or never connected); nothing to clean up.
         }
     }
 
@@ -310,10 +369,12 @@ class MqttListen extends Command
      * only php-mqtt's own bookkeeping runs (parsing acks, pings), which
      * takes microseconds, not the 10 s margin.
      *
-     * @param  bool  $staleOnly  false drops every pending command, for when the connection itself is gone
+     * @param  'stale'|'connection_lost'|'shutdown'  $reason  only 'stale' keeps commands still within their TTL; the others drop every pending command, because its connection is gone or about to be
      */
-    private function dropUnacknowledgedCommands(Repository $repository, bool $staleOnly): void
+    private function dropUnacknowledgedCommands(Repository $repository, string $reason): void
     {
+        $staleOnly = $reason === 'stale';
+
         // The repository has no "all pending" getter; "last sent before a
         // moment in the future" is every pending message.
         foreach ($repository->getPendingOutgoingMessagesLastSentBefore(new DateTime('+1 day')) as $pending) {
@@ -329,7 +390,6 @@ class MqttListen extends Command
 
             $repository->removePendingOutgoingMessage($pending->getMessageId());
 
-            $reason = $staleOnly ? 'stale' : 'connection_lost';
             $this->error("mqtt:listen: Dropped unacknowledged [{$command->action->value}] command to device [{$command->deviceId}] for access log [{$command->accessLogId}] ({$reason}).");
             Log::error('mqtt:listen: broker never acknowledged a device command; dropped instead of resending.', [
                 'access_log_id' => $command->accessLogId,

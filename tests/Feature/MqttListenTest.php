@@ -12,6 +12,7 @@ use App\Models\RfidCard;
 use App\Mqtt\DeviceCommand;
 use App\Services\AccessDecisionService;
 use Closure;
+use DateTime;
 use Illuminate\Console\Command;
 use Illuminate\Console\OutputStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -23,6 +24,7 @@ use Mockery\MockInterface;
 use PhpMqtt\Client\ConnectionSettings;
 use PhpMqtt\Client\Contracts\Repository;
 use PhpMqtt\Client\MqttClient as PhpMqttClient;
+use PhpMqtt\Client\PendingMessage;
 use PhpMqtt\Client\PublishedMessage;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
@@ -54,6 +56,9 @@ class MqttListenTest extends TestCase
     private ?ConnectionSettings $settings = null;
 
     private ?Repository $repository = null;
+
+    /** @var list<int> */
+    private array $pendingAfterHook = [];
 
     protected function setUp(): void
     {
@@ -117,6 +122,7 @@ class MqttListenTest extends TestCase
         $client = $this->client(function () {
             $this->addPendingCommands();
             ($this->loopHandler)();
+            $this->snapshotPending();
         });
 
         $this->runDaemon($client);
@@ -133,6 +139,7 @@ class MqttListenTest extends TestCase
             // php-mqtt calls this at the end of every connect, including its
             // own auto-reconnect in the middle of a loop iteration.
             ($this->connectedHandler)();
+            $this->snapshotPending();
         });
 
         $this->runDaemon($client);
@@ -148,6 +155,7 @@ class MqttListenTest extends TestCase
         $client = $this->client(function () use ($device) {
             $this->addPendingCommands();
             $this->subscriptions['parkir/+/status']("parkir/{$device->id}/status", json_encode(['online' => true]));
+            $this->snapshotPending();
         });
 
         $this->runDaemon($client);
@@ -235,6 +243,63 @@ class MqttListenTest extends TestCase
         $this->assertSame(now()->toDateTimeString(), AccessLog::sole()->scanned_at->toDateTimeString());
     }
 
+    #[DataProvider('shutdownSignals')]
+    public function test_a_shutdown_signal_while_the_broker_is_unreachable_stops_instead_of_retrying(int $signal): void
+    {
+        // A real signal to this very process: the daemon's handler catches it.
+        $client = $this->unreachableClient(fn () => posix_kill(getmypid(), $signal));
+
+        $connects = $this->runDaemon($client);
+
+        $this->assertSame(1, $connects, 'The daemon reconnected after being told to stop.');
+        Sleep::assertNeverSlept();
+        // And the signal goes back to PHP's default once the daemon is done.
+        $this->assertSame(SIG_DFL, pcntl_signal_get_handler($signal));
+    }
+
+    public static function shutdownSignals(): array
+    {
+        return [
+            'SIGTERM (kill, process managers)' => [SIGTERM],
+            'SIGINT (Ctrl+C)' => [SIGINT],
+        ];
+    }
+
+    public function test_a_shutdown_signal_during_the_reconnect_wait_stops_the_daemon(): void
+    {
+        // The signal lands while the daemon waits to retry an unreachable broker.
+        Sleep::whenFakingSleep(fn () => posix_kill(getmypid(), SIGTERM));
+
+        $connects = $this->runDaemon($this->unreachableClient());
+
+        $this->assertSame(1, $connects, 'The daemon reconnected after being told to stop.');
+        Sleep::assertSleptTimes(1);
+    }
+
+    public function test_a_shutdown_signal_while_listening_interrupts_the_loop_and_disconnects(): void
+    {
+        Log::spy();
+
+        $client = $this->client(function () {
+            $this->repository->addPendingOutgoingMessage($this->pendingCommand(1, accessLogId: 61, issuedAt: now()->getTimestamp()));
+            posix_kill(getmypid(), SIGTERM);
+        });
+        $client->shouldReceive('interrupt')->once();
+        $client->shouldReceive('disconnect')->once();
+
+        $this->assertSame(1, $this->runDaemon($client));
+
+        // Nothing can resend a command still waiting for its PUBACK once the
+        // daemon is gone, so it's logged like any other dropped command.
+        Log::shouldHaveReceived('error')->with(self::DROPPED_MESSAGE, [
+            'access_log_id' => 61,
+            'device_id' => 7,
+            'action' => 'open',
+            'issued_at' => now()->getTimestamp(),
+            'reason' => 'shutdown',
+        ])->once();
+    }
+
     /**
      * A mocked php-mqtt client that records what the daemon registers on it,
      * and whose loop() runs $whileLooping before returning.
@@ -260,15 +325,43 @@ class MqttListenTest extends TestCase
             $this->subscriptions[$topicFilter] = $callback;
         });
         $client->shouldReceive('loop')->once()->andReturnUsing(fn () => $whileLooping?->__invoke());
+        // On its way out the daemon interrupts (on a signal) and disconnects;
+        // tests that care set stricter expectations, which replace these.
+        $client->shouldReceive('interrupt')->byDefault();
+        $client->shouldReceive('disconnect')->byDefault();
 
         return $client;
     }
 
     /**
-     * Runs the daemon until a loop() returns normally. Accepts one client, or
-     * a closure returning the next client for each (re)connect attempt.
+     * A mocked client whose connect() fails like an unreachable broker, after
+     * running $duringConnect (e.g. a shutdown signal arriving meanwhile).
      */
-    private function runDaemon(MockInterface|Closure $clients): void
+    private function unreachableClient(?Closure $duringConnect = null): MockInterface
+    {
+        $client = Mockery::mock(PhpMqttClient::class);
+
+        $client->shouldReceive('registerLoopEventHandler')->once()->andReturnSelf();
+        $client->shouldReceive('registerConnectedEventHandler')->once()->andReturnSelf();
+        $client->shouldReceive('connect')->once()->andReturnUsing(function () use ($duringConnect) {
+            $duringConnect?->__invoke();
+
+            throw new RuntimeException('Socket error [111]: Connection refused');
+        });
+        $client->shouldReceive('subscribe')->never();
+        $client->shouldReceive('loop')->never();
+        $client->shouldReceive('interrupt')->byDefault();
+        $client->shouldReceive('disconnect')->byDefault();
+
+        return $client;
+    }
+
+    /**
+     * Runs the daemon until it stops. Accepts one client, or a closure
+     * returning the next client for each (re)connect attempt; returns how
+     * many connections it made.
+     */
+    private function runDaemon(MockInterface|Closure $clients): int
     {
         $nextClient = $clients instanceof Closure ? $clients : fn () => $clients;
         $connects = 0;
@@ -290,6 +383,8 @@ class MqttListenTest extends TestCase
 
         $this->assertSame(Command::SUCCESS, $command->handle($this->app->make(AccessDecisionService::class)));
         $this->assertLessThanOrEqual(3, $connects, 'The daemon kept reconnecting, so a mocked client must have failed unexpectedly.');
+
+        return $connects;
     }
 
     /**
@@ -305,11 +400,23 @@ class MqttListenTest extends TestCase
         $this->repository->addPendingOutgoingMessage(new PublishedMessage(3, 'parkir/7/status', '{"online":true}', 1, false));
     }
 
+    /**
+     * Records which messages are still pending right after the hook under
+     * test ran — before the daemon's own shutdown, which drops the rest.
+     */
+    private function snapshotPending(): void
+    {
+        $this->pendingAfterHook = array_map(
+            fn (PendingMessage $message) => $message->getMessageId(),
+            $this->repository->getPendingOutgoingMessagesLastSentBefore(new DateTime('+1 day')),
+        );
+    }
+
     private function assertOnlyTheStaleCommandWasDropped(): void
     {
-        $this->assertNull($this->repository->getPendingOutgoingMessage(1), 'The stale command should have been dropped.');
-        $this->assertNotNull($this->repository->getPendingOutgoingMessage(2), 'A command within its TTL must keep waiting for its PUBACK.');
-        $this->assertNotNull($this->repository->getPendingOutgoingMessage(3), 'Only our own commands may be touched.');
+        $this->assertNotContains(1, $this->pendingAfterHook, 'The stale command should have been dropped.');
+        $this->assertContains(2, $this->pendingAfterHook, 'A command within its TTL must keep waiting for its PUBACK.');
+        $this->assertContains(3, $this->pendingAfterHook, 'Only our own commands may be touched.');
 
         Log::shouldHaveReceived('error')->with(self::DROPPED_MESSAGE, [
             'access_log_id' => 41,

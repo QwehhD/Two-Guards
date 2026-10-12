@@ -20,9 +20,25 @@ dengan dua batasan:
 - admin terakhir tidak bisa dihapus maupun diturunkan menjadi karyawan. Aturan ini dijaga di
   model `User`, jadi berlaku juga lewat `php artisan tinker`.
 
-### Jalan darurat: admin lupa password
+### Akun yang dihapus
 
-Kalau tidak ada admin yang bisa login lagi, ganti password langsung dari server:
+Menghapus akun hanya menandainya terhapus (*soft delete*, kolom `users.deleted_at`); barisnya
+tetap ada supaya jejak audit tidak hilang:
+
+- akun itu tidak bisa login lagi, dan sesinya yang masih aktif langsung tidak berlaku pada
+  request berikutnya;
+- riwayat akses tetap menampilkan nama pemrosesnya, ditandai "(akun dihapus)";
+- halaman Akun hanya menampilkan akun aktif, dan penjaga admin terakhir hanya menghitung admin
+  yang belum dihapus;
+- emailnya tetap tercatat, jadi akun baru tidak bisa memakai email yang sama. Admin akan
+  mendapat pesan "Email ini masih tercatat untuk akun yang sudah dihapus".
+
+### Jalan darurat dari server
+
+Dua perintah untuk keadaan ketika halaman Akun tidak bisa dipakai. Keduanya perlu terminal
+interaktif, jadi tidak bisa dipakai dengan `--no-interaction`.
+
+**Admin lupa password.** Ganti password langsung dari server:
 
 ```bash
 php artisan user:set-password admin@example.com
@@ -30,8 +46,19 @@ php artisan user:set-password admin@example.com
 
 Password baru ditanyakan dua kali tanpa ditampilkan, dengan aturan yang sama seperti di
 aplikasi. Sengaja tidak bisa diberikan sebagai argumen, supaya tidak tersimpan di riwayat
-shell atau terlihat di daftar proses. Perintah ini perlu terminal interaktif, jadi tidak bisa
-dipakai dengan `--no-interaction`.
+shell atau terlihat di daftar proses.
+
+**Admin habis.** Normalnya tidak mungkin, karena admin terakhir dijaga. Tetapi dua admin yang
+saling menurunkan pada saat bersamaan, atau perubahan langsung di database, bisa tetap
+membuatnya terjadi. Jadikan akun yang masih ada sebagai admin:
+
+```bash
+php artisan user:make-admin karyawan1@example.com
+```
+
+Perintah ini menampilkan akun itu beserta jumlah admin aktif saat ini, lalu meminta konfirmasi.
+Akun yang sudah dihapus tidak bisa dijadikan admin. Kalau password akun itu juga tidak
+diketahui, lanjutkan dengan `user:set-password`.
 
 ## Menjalankan
 

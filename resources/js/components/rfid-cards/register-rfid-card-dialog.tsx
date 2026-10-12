@@ -33,9 +33,9 @@ type Props = {
 };
 
 /**
- * Reusable "register an RFID card" form, shown in a dialog. Used here to
- * register a card straight from an unknown access log row, and intended to
- * be reused as-is by the standalone RFID card management page later.
+ * Reusable "register an RFID card" form, shown in a dialog: from an unknown
+ * access log row (with initialUid), and from the RFID card management page
+ * (without one).
  */
 export function RegisterRfidCardDialog({ open, onOpenChange, initialUid = '', onRegistered }: Props) {
     const [uid, setUid] = useState(initialUid);
@@ -82,8 +82,9 @@ export function RegisterRfidCardDialog({ open, onOpenChange, initialUid = '', on
                 <DialogHeader>
                     <DialogTitle>Daftarkan Kartu RFID</DialogTitle>
                     <DialogDescription>
-                        Kartu ini pernah discan tapi belum terdaftar. Isi nama pemiliknya untuk
-                        mendaftarkan.
+                        {initialUid
+                            ? 'Kartu ini pernah discan tapi belum terdaftar. Isi nama pemiliknya untuk mendaftarkan.'
+                            : 'UID kartu baru paling mudah didapat dengan menempelkannya ke reader lalu mendaftarkannya dari Riwayat Akses. Kalau UID-nya sudah diketahui, ketik di sini.'}
                     </DialogDescription>
                 </DialogHeader>
 

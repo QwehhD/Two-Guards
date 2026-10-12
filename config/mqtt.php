@@ -11,8 +11,10 @@ return [
     | subscribed to parkir/+/scan and parkir/+/status) and by
     | MqttPublisherService (a short-lived connect-publish-disconnect
     | per call, from the HTTP process handling approve/reject/simulate
-    | requests). Username/password may be left blank for a local broker
-    | that has no auth configured yet.
+    | requests). Both log in as the server account (two-guards-server in
+    | deploy/mosquitto), the only one the broker's ACL lets publish device
+    | commands. Username/password may be left blank only for a broker
+    | without authentication.
     |
     */
 

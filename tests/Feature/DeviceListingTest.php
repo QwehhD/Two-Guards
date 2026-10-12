@@ -34,6 +34,16 @@ class DeviceListingTest extends TestCase
         $response->assertJsonFragment(['name' => 'Portal Depan']);
     }
 
+    public function test_the_listing_has_what_the_dashboard_shows(): void
+    {
+        $karyawan = User::factory()->create(['role' => UserRole::Karyawan]);
+        Device::factory()->create();
+
+        $this->actingAs($karyawan)->getJson('/api/devices')
+            ->assertOk()
+            ->assertJsonStructure([['id', 'name', 'mode', 'status', 'portal_status', 'last_seen_at']]);
+    }
+
     public function test_unauthenticated_user_cannot_list_devices(): void
     {
         $this->getJson('/api/devices')->assertUnauthorized();

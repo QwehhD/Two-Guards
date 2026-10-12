@@ -37,12 +37,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('password', [PasswordController::class, 'update']);
 });
 
-// Employee account & RFID card management (Tahap 3). Admin-only,
-// enforced by both the `role:admin` route middleware and each
-// controller's explicit policy checks as a second, data-aware layer.
+// Employee account & RFID card management (Tahap 3), and switching a
+// device between auto and manual. Admin-only, enforced by both the
+// `role:admin` route middleware and each controller's explicit policy
+// checks as a second, data-aware layer.
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::apiResource('users', UserController::class)->except(['show']);
     Route::apiResource('rfid-cards', RfidCardController::class)->except(['show']);
+    Route::patch('devices/{device}', [DeviceController::class, 'update']);
 });
 
 // Portal control & history (Tahap 4). Open to any authenticated role

@@ -5,13 +5,14 @@ namespace App\Models;
 use App\Enums\DeviceMode;
 use App\Enums\DeviceStatus;
 use App\Enums\PortalStatus;
+use Database\Factories\DeviceFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Device extends Model
 {
-    /** @use HasFactory<\Database\Factories\DeviceFactory> */
+    /** @use HasFactory<DeviceFactory> */
     use HasFactory;
 
     protected $fillable = [

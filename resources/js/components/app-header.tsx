@@ -1,4 +1,4 @@
-import { History, LayoutGrid, Menu, ShieldCheck, UserCog } from 'lucide-react';
+import { CreditCard, History, LayoutGrid, Menu, ShieldCheck, UserCog } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import AppLogo from '@/components/app-logo';
 import AppLogoIcon from '@/components/app-logo-icon';
@@ -52,8 +52,13 @@ const mainNavItems: NavItem[] = [
     },
 ];
 
-// Admin-only, like the /users route and /api/users behind it.
+// Admin-only, like the /users and /rfid-cards routes and the APIs behind them.
 const adminNavItems: NavItem[] = [
+    {
+        title: 'Kartu RFID',
+        href: '/rfid-cards',
+        icon: CreditCard,
+    },
     {
         title: 'Akun',
         href: '/users',

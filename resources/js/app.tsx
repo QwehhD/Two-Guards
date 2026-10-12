@@ -9,6 +9,7 @@ import Approvals from '@/pages/approvals';
 import Login from '@/pages/auth/login';
 import Dashboard from '@/pages/dashboard';
 import Landing from '@/pages/Landing';
+import RfidCards from '@/pages/rfid-cards';
 import Appearance from '@/pages/settings/appearance';
 import Profile from '@/pages/settings/profile';
 import Users from '@/pages/users';
@@ -123,6 +124,18 @@ export default function App() {
                         <AdminRoute>
                             <AppLayout breadcrumbs={[{ title: 'Manajemen Akun', href: '/users' }]}>
                                 <Users />
+                            </AppLayout>
+                        </AdminRoute>
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/rfid-cards"
+                element={
+                    <ProtectedRoute>
+                        <AdminRoute>
+                            <AppLayout breadcrumbs={[{ title: 'Kartu RFID', href: '/rfid-cards' }]}>
+                                <RfidCards />
                             </AppLayout>
                         </AdminRoute>
                     </ProtectedRoute>

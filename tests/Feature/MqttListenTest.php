@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Console\Commands\MqttListen;
 use App\Enums\DeviceCommandAction;
 use App\Enums\DeviceMode;
+use App\Enums\DeviceStatus;
+use App\Enums\PortalStatus;
 use App\Enums\RfidCardStatus;
 use App\Models\AccessLog;
 use App\Models\Device;
@@ -106,6 +108,72 @@ class MqttListenTest extends TestCase
         $this->assertDatabaseCount('access_logs', 1);
     }
 
+    public function test_a_live_status_marks_the_device_seen_now(): void
+    {
+        $device = Device::factory()->create([
+            'status' => DeviceStatus::Offline,
+            'portal_status' => PortalStatus::Closed,
+            'last_seen_at' => now()->subHour(),
+        ]);
+
+        $client = $this->client(function () use ($device) {
+            $this->subscriptions['parkir/+/status']("parkir/{$device->id}/status", '{"online":true,"portal_status":"open"}', false);
+        });
+
+        $this->runDaemon($client);
+
+        $device->refresh();
+        $this->assertSame(DeviceStatus::Online, $device->status);
+        $this->assertSame(PortalStatus::Open, $device->portal_status);
+        $this->assertSame(now()->toDateTimeString(), $device->last_seen_at->toDateTimeString());
+    }
+
+    public function test_a_retained_heartbeat_updates_the_state_but_not_last_seen_at(): void
+    {
+        $lastSeen = now()->subHour();
+        $device = Device::factory()->create([
+            'status' => DeviceStatus::Offline,
+            'portal_status' => PortalStatus::Closed,
+            'last_seen_at' => $lastSeen,
+        ]);
+
+        // The broker replays the last retained status on every
+        // (re)subscription, however long ago the device sent it.
+        $client = $this->client(function () use ($device) {
+            $this->subscriptions['parkir/+/status']("parkir/{$device->id}/status", '{"online":true,"portal_status":"open"}', true);
+        });
+
+        $this->runDaemon($client);
+
+        $device->refresh();
+        $this->assertSame(DeviceStatus::Online, $device->status);
+        $this->assertSame(PortalStatus::Open, $device->portal_status);
+        $this->assertSame($lastSeen->toDateTimeString(), $device->last_seen_at->toDateTimeString());
+    }
+
+    public function test_a_retained_lwt_marks_the_device_offline_but_not_seen(): void
+    {
+        $lastSeen = now()->subHour();
+        $device = Device::factory()->create([
+            'status' => DeviceStatus::Online,
+            'portal_status' => PortalStatus::Closed,
+            'last_seen_at' => $lastSeen,
+        ]);
+
+        // The device died while the daemon was down: what the daemon finds
+        // on subscribing is the LWT the broker sent on its behalf.
+        $client = $this->client(function () use ($device) {
+            $this->subscriptions['parkir/+/status']("parkir/{$device->id}/status", '{"online":false}', true);
+        });
+
+        $this->runDaemon($client);
+
+        $device->refresh();
+        $this->assertSame(DeviceStatus::Offline, $device->status);
+        $this->assertSame(PortalStatus::Closed, $device->portal_status);
+        $this->assertSame($lastSeen->toDateTimeString(), $device->last_seen_at->toDateTimeString());
+    }
+
     public function test_the_resend_timeout_leaves_a_margin_after_the_command_ttl(): void
     {
         $this->runDaemon($this->client());
@@ -154,7 +222,7 @@ class MqttListenTest extends TestCase
 
         $client = $this->client(function () use ($device) {
             $this->addPendingCommands();
-            $this->subscriptions['parkir/+/status']("parkir/{$device->id}/status", json_encode(['online' => true]));
+            $this->subscriptions['parkir/+/status']("parkir/{$device->id}/status", json_encode(['online' => true]), false);
             $this->snapshotPending();
         });
 

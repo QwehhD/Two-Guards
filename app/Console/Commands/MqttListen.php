@@ -168,8 +168,8 @@ class MqttListen extends Command
                     );
                     $mqtt->subscribe(
                         self::STATUS_TOPIC,
-                        function (string $topic, string $message) use ($dropStaleCommands): void {
-                            $this->handleStatus($topic, $message);
+                        function (string $topic, string $message, bool $retained) use ($dropStaleCommands): void {
+                            $this->handleStatus($topic, $message, $retained);
                             $dropStaleCommands();
                         },
                         1,
@@ -415,8 +415,13 @@ class MqttListen extends Command
      * ({"online": false}, no portal_status) exactly the same way, since
      * they land on the identical topic — see MqttPublisherService and
      * the Tahap 9 design notes for why the LWT is configured this way.
+     *
+     * Both are published retained, so $retained tells a status the device
+     * just sent from the broker replaying its last one when this daemon
+     * (re)subscribes — which happens after every reconnect, and can be
+     * hours old.
      */
-    private function handleStatus(string $topic, string $message): void
+    private function handleStatus(string $topic, string $message, bool $retained): void
     {
         $deviceId = $this->extractDeviceId($topic, 'status');
 
@@ -441,9 +446,16 @@ class MqttListen extends Command
         }
 
         $attributes = [
-            'last_seen_at' => now(),
             'status' => $payload['online'] ? DeviceStatus::Online : DeviceStatus::Offline,
         ];
+
+        // A replayed status still tells the last state the device reported
+        // (a device that died while this daemon was down left its retained
+        // LWT behind), but not when it reported it: only a live message
+        // proves the device is around right now.
+        if (! $retained) {
+            $attributes['last_seen_at'] = now();
+        }
 
         // The LWT payload carries no portal_status (a device that just
         // dropped its connection can't report the physical gate state),
@@ -466,7 +478,7 @@ class MqttListen extends Command
         // real device status change is just another trigger for it.
         PortalStatusUpdated::dispatch();
 
-        $this->info("mqtt:listen: device [{$deviceId}] status updated (online=".($payload['online'] ? 'true' : 'false').(isset($attributes['portal_status']) ? ", portal_status={$attributes['portal_status']->value}" : '').').');
+        $this->info("mqtt:listen: device [{$deviceId}] status updated (online=".($payload['online'] ? 'true' : 'false').(isset($attributes['portal_status']) ? ", portal_status={$attributes['portal_status']->value}" : '').($retained ? ', retained: last_seen_at unchanged' : '').').');
     }
 
     /**

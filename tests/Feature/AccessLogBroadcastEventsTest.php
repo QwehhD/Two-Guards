@@ -6,6 +6,7 @@ use App\Enums\AccessLogStatus;
 use App\Enums\DeviceMode;
 use App\Enums\UserRole;
 use App\Events\AccessLogCreated;
+use App\Events\AccessLogRecorded;
 use App\Events\AccessLogResolved;
 use App\Events\PortalStatusUpdated;
 use App\Events\RecentActivityUpdated;
@@ -17,10 +18,11 @@ use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
- * Covers the Tahap 8 real-time wiring: which of the four broadcast events
+ * Covers the Tahap 8 real-time wiring: which of the five broadcast events
  * fire under which conditions. The WebSocket delivery itself (Reverb ->
  * Echo -> the browser) is out of scope here — see the manual multi-tab
  * verification steps in the project notes for that; phpunit.xml already
@@ -68,6 +70,36 @@ class AccessLogBroadcastEventsTest extends TestCase
         // instant it's recorded, so it must never reach that feed.
         Event::assertNotDispatched(AccessLogCreated::class);
         Event::assertDispatched(RecentActivityUpdated::class);
+    }
+
+    #[DataProvider('scansOfEveryOutcome')]
+    public function test_every_scan_dispatches_access_log_recorded_for_the_access_history(DeviceMode $mode, bool $registered, AccessLogStatus $status): void
+    {
+        Event::fake([AccessLogRecorded::class]);
+
+        $user = User::factory()->create(['role' => UserRole::Karyawan]);
+        $device = Device::factory()->create(['mode' => $mode]);
+        $uid = $registered ? RfidCard::factory()->create()->uid : 'DEADBEEF';
+
+        $this->actingAs($user)->postJson('/api/access-logs/simulate-scan', [
+            'device_id' => $device->id,
+            'uid' => $uid,
+        ])->assertCreated();
+
+        // The Access History page lists every scan, so unlike AccessLogCreated
+        // this fires for scans that never needed a decision too.
+        Event::assertDispatchedTimes(AccessLogRecorded::class, 1);
+        Event::assertDispatched(AccessLogRecorded::class, fn ($event) => $event->accessLog->status === $status
+            && $event->accessLog->device_id === $device->id);
+    }
+
+    public static function scansOfEveryOutcome(): array
+    {
+        return [
+            'auto mode, registered card' => [DeviceMode::Auto, true, AccessLogStatus::Approved],
+            'auto mode, unknown card' => [DeviceMode::Auto, false, AccessLogStatus::Denied],
+            'manual mode' => [DeviceMode::Manual, true, AccessLogStatus::Pending],
+        ];
     }
 
     public function test_approving_a_pending_scan_dispatches_access_log_resolved(): void
@@ -183,11 +215,16 @@ class AccessLogBroadcastEventsTest extends TestCase
         $log = AccessLog::factory()->pending()->create();
 
         $createdChannels = (new AccessLogCreated($log))->broadcastOn();
+        $recordedChannels = (new AccessLogRecorded($log))->broadcastOn();
         $resolvedChannels = (new AccessLogResolved($log))->broadcastOn();
 
         $this->assertCount(1, $createdChannels);
         $this->assertInstanceOf(PrivateChannel::class, $createdChannels[0]);
         $this->assertSame('private-access-logs', $createdChannels[0]->name);
+
+        $this->assertCount(1, $recordedChannels);
+        $this->assertInstanceOf(PrivateChannel::class, $recordedChannels[0]);
+        $this->assertSame('private-access-logs', $recordedChannels[0]->name);
 
         $this->assertCount(1, $resolvedChannels);
         $this->assertInstanceOf(PrivateChannel::class, $resolvedChannels[0]);

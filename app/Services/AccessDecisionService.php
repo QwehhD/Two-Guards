@@ -7,6 +7,7 @@ use App\Enums\AccessLogStatus;
 use App\Enums\DeviceMode;
 use App\Enums\RfidCardStatus;
 use App\Events\AccessLogCreated;
+use App\Events\AccessLogRecorded;
 use App\Events\RecentActivityUpdated;
 use App\Models\AccessLog;
 use App\Models\Device;
@@ -63,6 +64,10 @@ class AccessDecisionService
         // page, whatever its status — including an auto-mode scan that
         // was already approved/denied the instant it was recorded.
         RecentActivityUpdated::dispatch();
+
+        // ...and for the signed-in Access History page, which lists every
+        // scan, not only those still waiting for a decision.
+        AccessLogRecorded::dispatch($log);
 
         // Only a scan left pending needs a human decision, so only that
         // case is relevant to the Approvals page's private feed.

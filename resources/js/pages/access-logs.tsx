@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchAccessLogs } from '@/services/accessLogService';
+import { echo } from '@/services/echo';
 import { useAuthStore } from '@/store/auth';
 import type {
     AccessLog,
@@ -79,10 +80,10 @@ export default function AccessLogs() {
     // backend); karyawan can view logs but never see the register action.
     const canRegisterCards = user?.role === 'admin';
 
-    // Logs live in their own array (not the raw paginated response), so
-    // when Tahap 8 wires up the MQTT/WebSocket feed, a new scan can be
-    // prepended with setLogs((prev) => [newLog, ...prev]) without having to
-    // touch or recompute the pagination meta below.
+    // Kept apart from the pagination meta below. The live feed further down
+    // doesn't prepend pushed scans into this array, though: it refetches,
+    // because only the server knows whether a scan matches the filters and
+    // belongs on the page being viewed.
     const [logs, setLogs] = useState<AccessLog[]>([]);
     const [meta, setMeta] = useState<PaginationMeta | null>(null);
     const [loading, setLoading] = useState(true);
@@ -175,27 +176,58 @@ export default function AccessLogs() {
     // registering a card can share one loader without racing each other.
     const requestIdRef = useRef(0);
 
-    const loadLogs = useCallback(async () => {
-        const requestId = ++requestIdRef.current;
-        setLoading(true);
-        setError(null);
+    // `silent` is for refetches the user didn't ask for (the live feed): no
+    // skeleton flashing over the table, and a failed refresh keeps the rows
+    // already on screen instead of replacing them with an error.
+    const loadLogs = useCallback(
+        async ({ silent = false }: { silent?: boolean } = {}) => {
+            const requestId = ++requestIdRef.current;
+            if (!silent) {
+                setLoading(true);
+                setError(null);
+            }
 
-        try {
-            const response = await fetchAccessLogs(buildFilters());
-            if (requestIdRef.current !== requestId) return;
-            setLogs(response.data);
-            setMeta(response.meta);
-        } catch {
-            if (requestIdRef.current !== requestId) return;
-            setError('Gagal memuat riwayat akses. Silakan coba lagi.');
-        } finally {
-            if (requestIdRef.current === requestId) setLoading(false);
-        }
-    }, [buildFilters]);
+            try {
+                const response = await fetchAccessLogs(buildFilters());
+                if (requestIdRef.current !== requestId) return;
+                setLogs(response.data);
+                setMeta(response.meta);
+            } catch {
+                if (requestIdRef.current !== requestId || silent) return;
+                setError('Gagal memuat riwayat akses. Silakan coba lagi.');
+            } finally {
+                if (requestIdRef.current === requestId) setLoading(false);
+            }
+        },
+        [buildFilters],
+    );
 
     useEffect(() => {
         void loadLogs();
     }, [loadLogs]);
+
+    // The subscription below outlives filter changes, so it reaches the
+    // current loader (and its current filters) through a ref instead of
+    // resubscribing every time the filters change.
+    const loadLogsRef = useRef(loadLogs);
+    useEffect(() => {
+        loadLogsRef.current = loadLogs;
+    }, [loadLogs]);
+
+    useEffect(() => {
+        const channel = echo.private('access-logs');
+        const refresh = () => void loadLogsRef.current({ silent: true });
+
+        // A new scan of any status, and a pending one reaching its final
+        // status (approved, rejected or expired). Leading "." because the
+        // backend events set broadcastAs() without the "App.Events." prefix.
+        channel.listen('.AccessLogRecorded', refresh);
+        channel.listen('.AccessLogResolved', refresh);
+
+        return () => {
+            echo.leave('access-logs');
+        };
+    }, []);
 
     const goToPage = (page: number) => {
         updateParams({ page: String(page) }, false);

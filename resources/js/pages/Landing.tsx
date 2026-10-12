@@ -180,13 +180,13 @@ export default function Landing() {
                         <AppLogo />
                     </Link>
                     <nav className="label-mono hidden flex-1 items-center justify-center gap-10 md:flex">
-                        <a href="#status" className="hover:text-primary transition-colors">
+                        <a href="#status" className="underline-offset-4 hover:underline">
                             Status
                         </a>
-                        <a href="#aktivitas" className="hover:text-primary transition-colors">
+                        <a href="#aktivitas" className="underline-offset-4 hover:underline">
                             Aktivitas
                         </a>
-                        <a href="#cara-kerja" className="hover:text-primary transition-colors">
+                        <a href="#cara-kerja" className="underline-offset-4 hover:underline">
                             Cara kerja
                         </a>
                     </nav>
@@ -257,7 +257,13 @@ export default function Landing() {
                         <dl className="label-mono grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
                             <dt className="opacity-60">Perangkat</dt>
                             <dd className="flex items-center gap-2">
-                                <span className={cn('size-2 rounded-full', isOnline ? 'bg-primary' : 'bg-background/40')} />
+                                {/* The tile is inverted (foreground colour), so the dot uses the page colour. */}
+                                <span
+                                    className={cn(
+                                        'size-2 rounded-full',
+                                        isOnline ? 'bg-background' : 'border-background/60 border',
+                                    )}
+                                />
                                 {loading ? '—' : isOnline ? 'Online' : 'Offline'}
                             </dd>
                             <dt className="opacity-60">Mode</dt>

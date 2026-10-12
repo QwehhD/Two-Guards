@@ -5,6 +5,7 @@ namespace App\Http\Requests\Users;
 use App\Concerns\ProfileValidationRules;
 use App\Enums\UserRole;
 use App\Models\User;
+use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rules\Enum;
@@ -35,7 +36,18 @@ class UpdateUserRequest extends FormRequest
             'name' => $this->nameRules(),
             'email' => $this->emailRules($target->id),
             'password' => ['sometimes', 'string', Password::default(), 'confirmed'],
-            'role' => ['required', new Enum(UserRole::class)],
+            'role' => [
+                'required',
+                new Enum(UserRole::class),
+                // Demoting the only admin would leave nobody able to manage
+                // accounts; User::booted() refuses it too, this just turns
+                // it into a field error the Akun page can show.
+                function (string $attribute, mixed $value, Closure $fail) use ($target): void {
+                    if ($value !== UserRole::Admin->value && $target->isLastAdmin()) {
+                        $fail('Admin terakhir tidak bisa diturunkan menjadi karyawan.');
+                    }
+                },
+            ],
         ];
     }
 }

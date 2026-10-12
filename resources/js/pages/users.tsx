@@ -1,5 +1,6 @@
 import { AlertCircle, KeyRound, Trash2, UserPlus } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { PageHeader } from '@/components/page-header';
 import { ChangePasswordDialog } from '@/components/users/change-password-dialog';
 import { CreateUserDialog } from '@/components/users/create-user-dialog';
 import { DeleteUserDialog } from '@/components/users/delete-user-dialog';
@@ -70,18 +71,16 @@ export default function Users() {
 
     return (
         <div className="flex flex-1 flex-col gap-4 p-4">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                    <h1 className="text-xl font-semibold">Manajemen Akun</h1>
-                    <p className="text-muted-foreground text-sm">
-                        Pendaftaran mandiri, hapus akun sendiri, dan reset password publik ditutup:
-                        akun dibuat, dihapus, dan password-nya diganti oleh admin di halaman ini.
-                    </p>
-                </div>
-                <Button onClick={() => setCreating(true)}>
-                    <UserPlus /> Tambah Akun
-                </Button>
-            </div>
+            <PageHeader
+                eyebrow="Admin"
+                title="Manajemen Akun"
+                description="Pendaftaran mandiri, hapus akun sendiri, dan reset password publik ditutup: akun dibuat, dihapus, dan password-nya diganti oleh admin di halaman ini."
+                actions={
+                    <Button onClick={() => setCreating(true)}>
+                        <UserPlus /> Tambah Akun
+                    </Button>
+                }
+            />
 
             {error && (
                 <Alert variant="destructive">
@@ -96,7 +95,7 @@ export default function Users() {
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
-                                <tr className="border-b text-left text-muted-foreground">
+                                <tr className="label-mono border-b text-left text-muted-foreground">
                                     <th className="px-3 py-2 font-medium">Nama</th>
                                     <th className="px-3 py-2 font-medium">Email</th>
                                     <th className="px-3 py-2 font-medium">Role</th>

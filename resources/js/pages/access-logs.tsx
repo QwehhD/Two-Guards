@@ -1,6 +1,7 @@
 import { AlertCircle } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { PageHeader } from '@/components/page-header';
 import { RegisterRfidCardDialog } from '@/components/rfid-cards/register-rfid-card-dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -237,12 +238,11 @@ export default function AccessLogs() {
 
     return (
         <div className="flex flex-1 flex-col gap-4 p-4">
-            <div>
-                <h1 className="text-xl font-semibold">Riwayat Akses</h1>
-                <p className="text-muted-foreground text-sm">
-                    Daftar setiap kartu yang discan di portal, terbaru lebih dulu.
-                </p>
-            </div>
+            <PageHeader
+                eyebrow="Riwayat"
+                title="Riwayat Akses"
+                description="Daftar setiap kartu yang discan di portal, terbaru lebih dulu. Diperbarui otomatis."
+            />
 
             <Card>
                 <CardContent className="flex flex-col gap-4">
@@ -342,7 +342,7 @@ export default function AccessLogs() {
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
-                                <tr className="border-b text-left text-muted-foreground">
+                                <tr className="label-mono border-b text-left text-muted-foreground">
                                     <th className="px-3 py-2 font-medium">Waktu Scan</th>
                                     <th className="px-3 py-2 font-medium">Nama Pemilik</th>
                                     <th className="px-3 py-2 font-medium">UID</th>

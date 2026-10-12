@@ -1,5 +1,6 @@
 import { AlertCircle, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { PageHeader } from '@/components/page-header';
 import { DeleteRfidCardDialog } from '@/components/rfid-cards/delete-rfid-card-dialog';
 import { EditRfidCardDialog } from '@/components/rfid-cards/edit-rfid-card-dialog';
 import { RegisterRfidCardDialog } from '@/components/rfid-cards/register-rfid-card-dialog';
@@ -59,18 +60,16 @@ export default function RfidCards() {
 
     return (
         <div className="flex flex-1 flex-col gap-4 p-4">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                    <h1 className="text-xl font-semibold">Kartu RFID</h1>
-                    <p className="text-muted-foreground text-sm">
-                        Kartu yang dikenali portal. Kartu nonaktif tetap tercatat setiap kali discan, tetapi
-                        selalu ditolak.
-                    </p>
-                </div>
-                <Button onClick={() => setRegistering(true)}>
-                    <Plus /> Tambah Kartu
-                </Button>
-            </div>
+            <PageHeader
+                eyebrow="Admin"
+                title="Kartu RFID"
+                description="Kartu yang dikenali portal. Kartu nonaktif tetap tercatat setiap kali discan, tetapi selalu ditolak."
+                actions={
+                    <Button onClick={() => setRegistering(true)}>
+                        <Plus /> Tambah Kartu
+                    </Button>
+                }
+            />
 
             {error && (
                 <Alert variant="destructive">
@@ -85,7 +84,7 @@ export default function RfidCards() {
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
-                                <tr className="border-b text-left text-muted-foreground">
+                                <tr className="label-mono border-b text-left text-muted-foreground">
                                     <th className="px-3 py-2 font-medium">UID</th>
                                     <th className="px-3 py-2 font-medium">Pemilik</th>
                                     <th className="px-3 py-2 font-medium">Status</th>

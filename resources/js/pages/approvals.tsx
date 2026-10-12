@@ -2,6 +2,7 @@ import axios from 'axios';
 import { Check, Clock, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { PageHeader } from '@/components/page-header';
 import { SimulateScanButton } from '@/components/simulate-scan-button';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -201,12 +202,11 @@ export default function Approvals() {
 
     return (
         <div className="flex flex-1 flex-col gap-4 p-4">
-            <div>
-                <h1 className="text-xl font-semibold">Persetujuan Manual</h1>
-                <p className="text-muted-foreground text-sm">
-                    Scan kartu yang menunggu keputusan Approve/Reject pada device bermode manual.
-                </p>
-            </div>
+            <PageHeader
+                eyebrow="Mode manual"
+                title="Persetujuan Manual"
+                description="Scan kartu yang menunggu keputusan Approve/Reject pada device bermode manual."
+            />
 
             {/* DEV ONLY: lets you test this flow before real ESP32/MQTT hardware exists (Tahap 9). */}
             {import.meta.env.DEV && <SimulateScanButton />}

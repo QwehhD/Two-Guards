@@ -1,7 +1,8 @@
-import { AlertCircle, KeyRound, UserPlus } from 'lucide-react';
+import { AlertCircle, KeyRound, Trash2, UserPlus } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { ChangePasswordDialog } from '@/components/users/change-password-dialog';
 import { CreateUserDialog } from '@/components/users/create-user-dialog';
+import { DeleteUserDialog } from '@/components/users/delete-user-dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -24,8 +25,9 @@ function sortByName(users: User[]): User[] {
 
 /**
  * Admin-only account management (the route and /api/users both enforce
- * that). With self-registration and public password reset closed, this is
- * where every account is created and every password is reset.
+ * that). With self-registration, self-deletion and public password reset
+ * closed, this is where every account is created, deleted, and has its
+ * password reset.
  */
 export default function Users() {
     const currentUser = useAuthStore((state) => state.user);
@@ -36,6 +38,18 @@ export default function Users() {
     const [creating, setCreating] = useState(false);
     // The account whose password is being changed; also the dialog's open state.
     const [changingPasswordFor, setChangingPasswordFor] = useState<User | null>(null);
+    // The account about to be deleted; also the confirmation dialog's open state.
+    const [deleting, setDeleting] = useState<User | null>(null);
+
+    // Mirrors the API's rules so the page never offers what it would refuse:
+    // nobody deletes their own account, and the last admin always stays.
+    const adminCount = users.filter((user) => user.role === 'admin').length;
+    const deleteBlockedReason = (user: User): string | null => {
+        if (user.id === currentUser?.id) return 'Akun sendiri tidak bisa dihapus.';
+        if (user.role === 'admin' && adminCount === 1) return 'Admin terakhir tidak bisa dihapus.';
+
+        return null;
+    };
 
     const loadUsers = useCallback(async () => {
         setLoading(true);
@@ -60,8 +74,8 @@ export default function Users() {
                 <div>
                     <h1 className="text-xl font-semibold">Manajemen Akun</h1>
                     <p className="text-muted-foreground text-sm">
-                        Pendaftaran mandiri dan reset password publik ditutup: akun baru dibuat dan
-                        password diganti oleh admin di halaman ini.
+                        Pendaftaran mandiri, hapus akun sendiri, dan reset password publik ditutup:
+                        akun dibuat, dihapus, dan password-nya diganti oleh admin di halaman ini.
                     </p>
                 </div>
                 <Button onClick={() => setCreating(true)}>
@@ -128,13 +142,25 @@ export default function Users() {
                                                 </Badge>
                                             </td>
                                             <td className="px-3 py-3">
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    onClick={() => setChangingPasswordFor(user)}
-                                                >
-                                                    <KeyRound /> Ganti Password
-                                                </Button>
+                                                <div className="flex flex-wrap gap-2">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => setChangingPasswordFor(user)}
+                                                    >
+                                                        <KeyRound /> Ganti Password
+                                                    </Button>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        className="text-destructive"
+                                                        disabled={deleteBlockedReason(user) !== null}
+                                                        title={deleteBlockedReason(user) ?? undefined}
+                                                        onClick={() => setDeleting(user)}
+                                                    >
+                                                        <Trash2 /> Hapus
+                                                    </Button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}
@@ -156,6 +182,15 @@ export default function Users() {
                 onOpenChange={(open) => {
                     if (!open) setChangingPasswordFor(null);
                 }}
+            />
+
+            <DeleteUserDialog
+                user={deleting}
+                open={deleting !== null}
+                onOpenChange={(open) => {
+                    if (!open) setDeleting(null);
+                }}
+                onDeleted={(deleted) => setUsers((prev) => prev.filter((user) => user.id !== deleted.id))}
             />
         </div>
     );

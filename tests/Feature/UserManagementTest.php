@@ -164,7 +164,8 @@ class UserManagementTest extends TestCase
         $response = $this->actingAs($admin)->deleteJson("/api/users/{$target->id}");
 
         $response->assertNoContent();
-        $this->assertDatabaseMissing('users', ['id' => $target->id]);
+        // Soft deleted: the row stays for the audit trail, marked deleted.
+        $this->assertSoftDeleted('users', ['id' => $target->id]);
     }
 
     public function test_karyawan_cannot_delete_a_user(): void
@@ -198,10 +199,10 @@ class UserManagementTest extends TestCase
 
         $this->actingAs($admin)->deleteJson("/api/users/{$otherAdmin->id}")->assertNoContent();
 
-        $this->assertDatabaseMissing('users', ['id' => $otherAdmin->id]);
+        $this->assertSoftDeleted('users', ['id' => $otherAdmin->id]);
     }
 
-    public function test_deleting_an_account_keeps_the_access_logs_it_processed(): void
+    public function test_deleting_an_account_keeps_who_processed_its_access_logs(): void
     {
         $admin = User::factory()->create(['role' => UserRole::Admin]);
         $karyawan = User::factory()->create(['role' => UserRole::Karyawan]);
@@ -210,8 +211,8 @@ class UserManagementTest extends TestCase
 
         $this->actingAs($admin)->deleteJson("/api/users/{$karyawan->id}")->assertNoContent();
 
-        // The history stays; only "processed by" is forgotten.
-        $this->assertDatabaseHas('access_logs', ['id' => $log->id, 'status' => 'approved', 'processed_by' => null]);
+        // The account is only soft deleted, so the history still knows who processed it.
+        $this->assertDatabaseHas('access_logs', ['id' => $log->id, 'status' => 'approved', 'processed_by' => $karyawan->id]);
     }
 
     public function test_the_last_admin_cannot_be_demoted(): void

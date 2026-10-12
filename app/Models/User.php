@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
@@ -30,13 +31,20 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property string|null $remember_token
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ * @property Carbon|null $deleted_at
  */
 #[Fillable(['name', 'email', 'password', 'role'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable implements PasskeyUser
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
+    use HasFactory, Notifiable, PasskeyAuthenticatable, SoftDeletes, TwoFactorAuthenticatable;
+
+    // Deleting an account only marks it deleted (SoftDeletes), so the audit
+    // trail keeps the name. SoftDeletes' global scope hides deleted accounts
+    // from every query — login, the session guard's per-request lookup, the
+    // Akun page, the last-admin count — unless a query asks for them
+    // explicitly with withTrashed()/onlyTrashed().
 
     /**
      * Get the attributes that should be cast.
@@ -76,10 +84,13 @@ class User extends Authenticatable implements PasskeyUser
 
     /**
      * Whether this account, as currently stored, is the only admin left.
+     * Deleted accounts don't count — they can't log in — and the query's
+     * soft-delete scope leaves them out of the count too.
      */
     public function isLastAdmin(): bool
     {
-        return $this->getOriginal('role') === UserRole::Admin
+        return ! $this->trashed()
+            && $this->getOriginal('role') === UserRole::Admin
             && static::query()->where('role', UserRole::Admin)->count() === 1;
     }
 

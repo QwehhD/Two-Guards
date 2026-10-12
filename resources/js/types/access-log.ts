@@ -15,7 +15,8 @@ export type AccessLog = {
     mode: AccessLogMode;
     status: AccessLogStatus;
     device: { id: number; name: string } | null;
-    processed_by: { id: number; name: string } | null;
+    // `deleted`: the processor's account has since been deleted; the name is kept for the audit trail.
+    processed_by: { id: number; name: string; deleted: boolean } | null;
     scanned_at: string | null;
     processed_at: string | null;
 };

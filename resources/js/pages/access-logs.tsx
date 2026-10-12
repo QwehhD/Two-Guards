@@ -370,7 +370,16 @@ export default function AccessLogs() {
                                             </td>
                                             <td className="px-3 py-3">{MODE_LABEL[log.mode]}</td>
                                             <td className="px-3 py-3">
-                                                {log.processed_by?.name ?? '-'}
+                                                {log.processed_by ? (
+                                                    <>
+                                                        {log.processed_by.name}
+                                                        {log.processed_by.deleted && (
+                                                            <span className="text-muted-foreground"> (akun dihapus)</span>
+                                                        )}
+                                                    </>
+                                                ) : (
+                                                    '-'
+                                                )}
                                             </td>
                                             {canRegisterCards && (
                                                 <td className="px-3 py-3">

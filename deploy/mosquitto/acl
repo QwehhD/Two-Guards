@@ -1,0 +1,30 @@
+# ACL Mosquitto untuk Two-Guards (kontrak topic: docs/mqtt-topics.md).
+#
+# Prinsip: hanya server yang boleh publish ke topic command. Tanpa ACL, siapa
+# pun yang tahu password device bisa publish {"action":"open"} dan membuka
+# gerbang.
+#
+# Dipasang sebagai /etc/mosquitto/two-guards/acl. Setelah diubah:
+#   sudo systemctl reload mosquitto
+#
+# Topic yang tidak disebut untuk sebuah user tertolak.
+
+# Server Laravel: daemon mqtt:listen dan job PublishDeviceCommand.
+user two-guards-server
+topic read parkir/+/scan
+topic read parkir/+/status
+topic write parkir/+/command
+
+# ESP32 portal device 1. Status termasuk LWT {"online":false}, yang dicek
+# terhadap izin write user ini saat konek.
+user device-1
+topic write parkir/1/scan
+topic write parkir/1/status
+topic read parkir/1/command
+
+# Pemantau untuk debugging dengan mosquitto_sub: hanya baca.
+user two-guards-monitor
+topic read parkir/#
+
+# Device baru: tambahkan blok seperti device-1 dengan nomor id-nya, lalu
+# buat password-nya dengan mosquitto_passwd.

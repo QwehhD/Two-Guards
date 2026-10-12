@@ -15,6 +15,18 @@ salah satunya bersamaan, jangan dibiarkan.
 `{device_id}` adalah `id` numerik di tabel `devices`. Broker diatur lewat `MQTT_HOST`,
 `MQTT_PORT`, `MQTT_USERNAME`, dan `MQTT_PASSWORD`.
 
+Broker menolak koneksi tanpa akun, dan ACL-nya membatasi tiap akun (pemasangan:
+[deploy/mosquitto/README.md](../deploy/mosquitto/README.md)):
+
+| User | Baca | Tulis |
+| --- | --- | --- |
+| `two-guards-server` | `parkir/+/scan`, `parkir/+/status` | `parkir/+/command` |
+| `device-{device_id}` | `parkir/{device_id}/command` | `parkir/{device_id}/scan`, `parkir/{device_id}/status` (termasuk LWT) |
+| `two-guards-monitor` | `parkir/#` | tidak ada |
+
+Hanya server yang boleh publish ke topic command. Device tidak bisa membuka gerbangnya sendiri,
+apalagi gerbang device lain, walaupun password-nya bocor.
+
 Client ID server memakai `MQTT_CLIENT_ID_PREFIX`: daemon memakai `{prefix}-listener`, setiap
 publish dari job memakai `{prefix}-publisher-{acak}`. Dua client dengan ID yang sama saling
 memutus koneksi di broker, jadi jangan menjalankan dua `mqtt:listen` dengan prefix yang sama.
@@ -117,17 +129,34 @@ Payload dan topic ini dibangun di satu tempat saja, `App\Mqtt\DeviceCommand`.
 
 ## Mencoba tanpa hardware
 
+Contoh di bawah membaca password dari variabel shell supaya tidak tersimpan di riwayat. Isi
+dulu dengan `read -rs MQTT_DEVICE_PASSWORD` dan `read -rs MQTT_MONITOR_PASSWORD` (bash/zsh),
+atau `read -s MQTT_DEVICE_PASSWORD` (fish). Simulasi scan memakai akun `device-1`, pemantauan
+memakai `two-guards-monitor`.
+
 ```bash
 # Pantau semua command yang dikirim server (dengan timestamp)
-mosquitto_sub -h localhost -t 'parkir/+/command' -F '%I | %t | %p'
+mosquitto_sub -h localhost -u two-guards-monitor -P "$MQTT_MONITOR_PASSWORD" \
+  -t 'parkir/+/command' -F '%I | %t | %p'
+
+# Pantau semua topic
+mosquitto_sub -h localhost -u two-guards-monitor -P "$MQTT_MONITOR_PASSWORD" -t 'parkir/#' -v
 
 # Scan di device 1 (auto: langsung dibalas command; manual: muncul di halaman Persetujuan)
-mosquitto_pub -h localhost -t parkir/1/scan -m '{"uid":"A1B2C3D4"}'
+mosquitto_pub -h localhost -u device-1 -P "$MQTT_DEVICE_PASSWORD" \
+  -t parkir/1/scan -m '{"uid":"A1B2C3D4"}'
 
-# Scan dengan waktu scan dari device (epoch detik, seperti yang akan dikirim ESP32)
-mosquitto_pub -h localhost -t parkir/1/scan -m "{\"uid\":\"A1B2C3D4\",\"scanned_at\":$(date +%s)}"
+# Scan dengan waktu scan dari device (epoch detik, seperti yang dikirim ESP32)
+mosquitto_pub -h localhost -u device-1 -P "$MQTT_DEVICE_PASSWORD" \
+  -t parkir/1/scan -m "{\"uid\":\"A1B2C3D4\",\"scanned_at\":$(date +%s)}"
 
 # Heartbeat dan LWT
-mosquitto_pub -h localhost -t parkir/1/status -m '{"online":true,"portal_status":"closed"}'
-mosquitto_pub -h localhost -t parkir/1/status -m '{"online":false}'
+mosquitto_pub -h localhost -u device-1 -P "$MQTT_DEVICE_PASSWORD" \
+  -t parkir/1/status -m '{"online":true,"portal_status":"closed"}'
+mosquitto_pub -h localhost -u device-1 -P "$MQTT_DEVICE_PASSWORD" \
+  -t parkir/1/status -m '{"online":false}'
 ```
+
+Command tidak bisa disimulasikan dengan `device-1` maupun `two-guards-monitor`: ACL menolaknya
+diam-diam (penolakannya baru terlihat dengan `mosquitto_pub -V mqttv5 -q 1`). Untuk memicu
+command, simulasikan scan seperti di atas.

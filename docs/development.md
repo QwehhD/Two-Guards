@@ -10,6 +10,14 @@ php artisan migrate --seed
 Seeder membuat satu admin (`admin@example.com`) dan dua karyawan, semuanya dengan password
 `password`.
 
+Pasang juga konfigurasi Mosquitto (listener jaringan lokal, akun, dan ACL) sekali, mengikuti
+[deploy/mosquitto/README.md](../deploy/mosquitto/README.md), lalu isi akun server di `.env`:
+
+```dotenv
+MQTT_USERNAME=two-guards-server
+MQTT_PASSWORD=password-yang-diberikan-ke-mosquitto_passwd
+```
+
 ## Akun
 
 Pendaftaran mandiri, hapus akun sendiri, dan reset password publik semuanya ditutup. Akun
@@ -83,6 +91,33 @@ service sistem (`sudo systemctl start mosquitto`).
 Tab `queue`, `device-commands`, `mqtt`, dan `schedule` diatur di
 `AppServiceProvider::configureDevCommands()` (untuk `queue`, menggantikan bawaan Laravel yang
 polling tiap 3 detik); sisanya bawaan Laravel dan Reverb.
+
+## Broker MQTT
+
+Broker menolak koneksi tanpa akun. `mqtt:listen` dan worker `device-commands` login dengan
+`MQTT_USERNAME`/`MQTT_PASSWORD` dari `.env`. Kalau salah, tab `mqtt` mencatat
+`broker connection lost or failed ... The configured broker responded with unauthorized.` dan
+mencoba lagi tiap 5 detik.
+
+| Akun | Untuk |
+| --- | --- |
+| `two-guards-server` | Server Laravel, satu-satunya yang boleh mengirim command ke device |
+| `device-1` | ESP32 device 1, dan simulasi scan dengan `mosquitto_pub` |
+| `two-guards-monitor` | Memantau dengan `mosquitto_sub`, hanya baca |
+
+Memantau semua lalu lintas device:
+
+```bash
+read -rs MQTT_MONITOR_PASSWORD   # fish: read -s MQTT_MONITOR_PASSWORD
+mosquitto_sub -h localhost -u two-guards-monitor -P "$MQTT_MONITOR_PASSWORD" -t 'parkir/#' -v
+```
+
+Publish yang ditolak ACL dibuang broker diam-diam: client MQTT 3.1.1 tidak mendapat error, dan
+log broker dengan `log_type` bawaan juga tidak mencatatnya. Penolakannya terlihat kalau publish
+memakai MQTT 5 dan QoS 1 (`mosquitto_pub -V mqttv5 -q 1 ...` mencetak
+`Publish 1 failed: Not authorized.`). Subscribe ke topic yang tidak boleh dibaca tetap "berhasil",
+tetapi tidak pernah menerima pesan. Kalau pesan terasa hilang, berkas `acl` adalah tempat pertama
+yang dicek.
 
 ## Tugas terjadwal
 
@@ -158,7 +193,9 @@ lebih dulu.
 
 ## Mensimulasikan perangkat
 
-Lihat bagian "Mencoba tanpa hardware" di [mqtt-topics.md](mqtt-topics.md). Di halaman
+Lihat bagian "Mencoba tanpa hardware" di [mqtt-topics.md](mqtt-topics.md): scan disimulasikan
+dengan `mosquitto_pub -u device-1 -P ...`, dan command dipantau dengan
+`mosquitto_sub -u two-guards-monitor -P ...`. Di halaman
 Persetujuan juga ada tombol **Simulasikan Scan** (hanya di build development) yang memanggil
 logika keputusan yang sama tanpa MQTT.
 

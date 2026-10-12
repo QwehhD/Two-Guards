@@ -15,3 +15,6 @@ export type CreateRfidCardPayload = {
     owner_name: string;
     status: RfidCardStatus;
 };
+
+// PUT /api/rfid-cards/{id} takes every field again, same as creating.
+export type UpdateRfidCardPayload = CreateRfidCardPayload;

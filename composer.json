@@ -67,13 +67,19 @@
             "npm run types:check",
             "@test"
         ],
+        "phpstan:check": [
+            "phpstan analyse --memory-limit=1G"
+        ],
+        "phpstan:baseline": [
+            "phpstan analyse --memory-limit=1G --generate-baseline --allow-empty-baseline"
+        ],
         "types:check": [
-            "phpstan analyse"
+            "@phpstan:check"
         ],
         "test": [
             "@php artisan config:clear --ansi",
             "@lint:check",
-            "@types:check",
+            "@phpstan:check",
             "@php artisan test"
         ],
         "post-autoload-dump": [
@@ -94,6 +100,12 @@
         "pre-package-uninstall": [
             "Illuminate\\Foundation\\ComposerScripts::prePackageUninstall"
         ]
+    },
+    "scripts-descriptions": {
+        "test": "Required check before every commit: Pint, PHPStan and the PHPUnit suite",
+        "phpstan:check": "Run PHPStan; errors listed in phpstan-baseline.neon are tolerated, new ones fail",
+        "phpstan:baseline": "Rewrite phpstan-baseline.neon after fixing errors listed in it",
+        "types:check": "Old name of phpstan:check (PHPStan, not tsc), kept so existing commands keep working"
     },
     "extra": {
         "laravel": {

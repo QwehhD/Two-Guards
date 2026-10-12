@@ -2,6 +2,10 @@
 
 @import 'tw-animate-css';
 
+/* Self-hosted, so labels and headings look the same offline (OFL-1.1). */
+@import '@fontsource/space-mono/400.css';
+@import '@fontsource/space-mono/700.css';
+
 @source '../views';
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 
@@ -12,6 +16,8 @@
         'Instrument Sans', ui-sans-serif, system-ui, sans-serif,
         'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
         'Noto Color Emoji';
+    --font-mono:
+        'Space Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
     --radius-lg: var(--radius);
     --radius-md: calc(var(--radius) - 2px);
@@ -59,77 +65,108 @@
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-ring: var(--sidebar-ring);
+
+    --animate-marquee: marquee 40s linear infinite;
+    --animate-scan-ping: scan-ping 1.2s ease-out;
+
+    /* The text is rendered twice side by side, so -50% loops seamlessly. */
+    @keyframes marquee {
+        from {
+            transform: translateX(0);
+        }
+        to {
+            transform: translateX(-50%);
+        }
+    }
+
+    @keyframes scan-ping {
+        from {
+            transform: scale(0.6);
+            opacity: 0.9;
+        }
+        to {
+            transform: scale(2.4);
+            opacity: 0;
+        }
+    }
 }
 
+/*
+ * Concrete grey panels separated by thin visible grid lines, one orange
+ * accent, monospace labels. Panels (card) sit a step lighter than the
+ * page; the grid lines reuse the border colour.
+ */
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
+    --background: oklch(0.924 0.005 106.5);
+    --foreground: oklch(0.196 0 0);
+    --card: oklch(0.954 0.004 106.5);
+    --card-foreground: oklch(0.196 0 0);
+    --popover: oklch(0.954 0.004 106.5);
+    --popover-foreground: oklch(0.196 0 0);
+    --primary: oklch(0.702 0.198 42.5);
+    --primary-foreground: oklch(0.191 0 0);
+    --secondary: oklch(0.887 0.007 106.5);
+    --secondary-foreground: oklch(0.196 0 0);
+    --muted: oklch(0.887 0.007 106.5);
+    --muted-foreground: oklch(0.516 0.008 106.7);
+    --accent: oklch(0.887 0.007 106.5);
+    --accent-foreground: oklch(0.196 0 0);
     --destructive: oklch(0.577 0.245 27.325);
     --destructive-foreground: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.87 0 0);
+    --border: oklch(0.828 0.008 106.6);
+    --input: oklch(0.828 0.008 106.6);
+    --ring: oklch(0.702 0.198 42.5);
+    --grid-line: oklch(0.196 0 0 / 0.07);
     --chart-1: oklch(0.646 0.222 41.116);
     --chart-2: oklch(0.6 0.118 184.704);
     --chart-3: oklch(0.398 0.07 227.392);
     --chart-4: oklch(0.828 0.189 84.429);
     --chart-5: oklch(0.769 0.188 70.08);
-    --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.87 0 0);
+    --radius: 0.375rem;
+    --sidebar: oklch(0.954 0.004 106.5);
+    --sidebar-foreground: oklch(0.196 0 0);
+    --sidebar-primary: oklch(0.702 0.198 42.5);
+    --sidebar-primary-foreground: oklch(0.191 0 0);
+    --sidebar-accent: oklch(0.887 0.007 106.5);
+    --sidebar-accent-foreground: oklch(0.196 0 0);
+    --sidebar-border: oklch(0.828 0.008 106.6);
+    --sidebar-ring: oklch(0.702 0.198 42.5);
 }
 
 .dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.145 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.145 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.985 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
+    --background: oklch(0.178 0 0);
+    --foreground: oklch(0.942 0.005 106.5);
+    --card: oklch(0.213 0 0);
+    --card-foreground: oklch(0.942 0.005 106.5);
+    --popover: oklch(0.213 0 0);
+    --popover-foreground: oklch(0.942 0.005 106.5);
+    --primary: oklch(0.702 0.198 42.5);
+    --primary-foreground: oklch(0.191 0 0);
+    --secondary: oklch(0.26 0 0);
+    --secondary-foreground: oklch(0.942 0.005 106.5);
+    --muted: oklch(0.26 0 0);
+    --muted-foreground: oklch(0.688 0.009 106.6);
+    --accent: oklch(0.26 0 0);
+    --accent-foreground: oklch(0.942 0.005 106.5);
     --destructive: oklch(0.396 0.141 25.723);
     --destructive-foreground: oklch(0.637 0.237 25.331);
-    --border: oklch(0.269 0 0);
-    --input: oklch(0.269 0 0);
-    --ring: oklch(0.439 0 0);
+    --border: oklch(0.301 0 0);
+    --input: oklch(0.301 0 0);
+    --ring: oklch(0.702 0.198 42.5);
+    --grid-line: oklch(1 0 0 / 0.05);
     --chart-1: oklch(0.488 0.243 264.376);
     --chart-2: oklch(0.696 0.17 162.48);
     --chart-3: oklch(0.769 0.188 70.08);
     --chart-4: oklch(0.627 0.265 303.9);
     --chart-5: oklch(0.645 0.246 16.439);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.985 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(0.269 0 0);
-    --sidebar-ring: oklch(0.439 0 0);
+    --sidebar: oklch(0.213 0 0);
+    --sidebar-foreground: oklch(0.942 0.005 106.5);
+    --sidebar-primary: oklch(0.702 0.198 42.5);
+    --sidebar-primary-foreground: oklch(0.191 0 0);
+    --sidebar-accent: oklch(0.26 0 0);
+    --sidebar-accent-foreground: oklch(0.942 0.005 106.5);
+    --sidebar-border: oklch(0.301 0 0);
+    --sidebar-ring: oklch(0.702 0.198 42.5);
 }
 
 @layer base {
@@ -140,4 +177,25 @@
     body {
         @apply bg-background text-foreground;
     }
+}
+
+/* The visible layout grid behind every page, as in the reference design. */
+@utility bg-grid {
+    background-image:
+        linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+        linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+    background-size: 6rem 6rem;
+}
+
+/*
+ * Small uppercase monospace label: navigation, table headers, buttons,
+ * badges. Not named text-* so tailwind-merge never mistakes it for a
+ * text colour or size and drops it.
+ */
+@utility label-mono {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    line-height: 1rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
 }

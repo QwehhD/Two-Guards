@@ -56,38 +56,16 @@ class ProfileTest extends TestCase
         $this->assertNotNull($user->refresh()->email_verified_at);
     }
 
-    public function test_user_can_delete_their_account(): void
+    public function test_an_account_cannot_be_deleted_from_its_own_profile(): void
     {
         $user = User::factory()->create();
 
-        // Deleting also ends the session, which only exists on a stateful
-        // (SPA) request — so send it the way the SPA does, from a domain
-        // Sanctum treats as stateful.
-        config(['sanctum.stateful' => ['localhost']]);
-
-        $response = $this->actingAs($user)
-            ->withHeader('Referer', 'http://localhost/settings/profile')
-            ->deleteJson('/api/profile', [
-                'password' => 'password',
-            ]);
-
-        $response->assertNoContent();
-        // The session login (web guard) is what ProfileController ends;
-        // during the request auth:sanctum made sanctum the default guard.
-        $this->assertGuest('web');
-        $this->assertNull($user->fresh());
-    }
-
-    public function test_correct_password_must_be_provided_to_delete_account(): void
-    {
-        $user = User::factory()->create();
-
+        // Only an admin deletes accounts, on the Akun page (DELETE /api/users/{user}).
         $response = $this->actingAs($user)->deleteJson('/api/profile', [
-            'password' => 'wrong-password',
+            'password' => 'password',
         ]);
 
-        $response->assertUnprocessable();
-        $response->assertJsonValidationErrors('password');
+        $response->assertMethodNotAllowed();
         $this->assertNotNull($user->fresh());
     }
 }

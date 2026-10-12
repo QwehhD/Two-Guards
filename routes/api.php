@@ -30,9 +30,9 @@ Route::prefix('public')->group(function () {
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('me', [AuthController::class, 'me']);
 
+    // No DELETE: accounts are deleted only by an admin (DELETE /api/users/{user}).
     Route::get('profile', [ProfileController::class, 'show']);
     Route::patch('profile', [ProfileController::class, 'update']);
-    Route::delete('profile', [ProfileController::class, 'destroy']);
 
     Route::put('password', [PasswordController::class, 'update']);
 });

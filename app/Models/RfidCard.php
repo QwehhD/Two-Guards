@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\RfidCardStatus;
+use Database\Factories\RfidCardFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class RfidCard extends Model
 {
-    /** @use HasFactory<\Database\Factories\RfidCardFactory> */
+    /** @use HasFactory<RfidCardFactory> */
     use HasFactory;
 
     protected $fillable = [
@@ -27,9 +28,13 @@ class RfidCard extends Model
         ];
     }
 
+    /**
+     * Who registered the card — kept after their account is deleted
+     * (withTrashed), the same audit rule as AccessLog::processor().
+     */
     public function creator(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'created_by');
+        return $this->belongsTo(User::class, 'created_by')->withTrashed();
     }
 
     public function accessLogs(): HasMany

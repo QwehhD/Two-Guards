@@ -28,9 +28,12 @@ class AccessLogResource extends JsonResource
                 'id' => $this->device->id,
                 'name' => $this->device->name,
             ]),
+            // The processor relation includes deleted accounts, so the name
+            // survives; `deleted` lets the history mark it as such.
             'processed_by' => $this->whenLoaded('processor', fn () => $this->processor ? [
                 'id' => $this->processor->id,
                 'name' => $this->processor->name,
+                'deleted' => $this->processor->trashed(),
             ] : null),
             'scanned_at' => $this->scanned_at?->toIso8601String(),
             'processed_at' => $this->processed_at?->toIso8601String(),

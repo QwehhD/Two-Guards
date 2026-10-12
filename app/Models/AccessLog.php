@@ -4,13 +4,14 @@ namespace App\Models;
 
 use App\Enums\AccessLogMode;
 use App\Enums\AccessLogStatus;
+use Database\Factories\AccessLogFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AccessLog extends Model
 {
-    /** @use HasFactory<\Database\Factories\AccessLogFactory> */
+    /** @use HasFactory<AccessLogFactory> */
     use HasFactory;
 
     /**
@@ -53,8 +54,12 @@ class AccessLog extends Model
         return $this->belongsTo(RfidCard::class);
     }
 
+    /**
+     * Who approved/rejected the scan — still there after their account is
+     * deleted (withTrashed), so the history never loses that name.
+     */
     public function processor(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'processed_by');
+        return $this->belongsTo(User::class, 'processed_by')->withTrashed();
     }
 }

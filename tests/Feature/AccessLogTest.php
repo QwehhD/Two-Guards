@@ -192,7 +192,7 @@ class AccessLogTest extends TestCase
         $response->assertJsonFragment([
             'id' => $log->id,
             'status' => AccessLogStatus::Approved->value,
-            'processed_by' => ['id' => $admin->id, 'name' => $admin->name],
+            'processed_by' => ['id' => $admin->id, 'name' => $admin->name, 'deleted' => false],
         ]);
         $this->assertDatabaseHas('access_logs', [
             'id' => $log->id,
@@ -212,7 +212,7 @@ class AccessLogTest extends TestCase
         $response->assertJsonFragment([
             'id' => $log->id,
             'status' => AccessLogStatus::Denied->value,
-            'processed_by' => ['id' => $karyawan->id, 'name' => $karyawan->name],
+            'processed_by' => ['id' => $karyawan->id, 'name' => $karyawan->name, 'deleted' => false],
         ]);
         $this->assertDatabaseHas('access_logs', [
             'id' => $log->id,
@@ -299,5 +299,19 @@ class AccessLogTest extends TestCase
         $this->getJson('/api/access-logs')->assertUnauthorized();
         $this->postJson("/api/access-logs/{$log->id}/approve")->assertUnauthorized();
         $this->postJson("/api/access-logs/{$log->id}/reject")->assertUnauthorized();
+    }
+
+    public function test_the_history_still_names_who_processed_a_scan_after_their_account_is_deleted(): void
+    {
+        $admin = User::factory()->create(['role' => UserRole::Admin]);
+        $karyawan = User::factory()->create(['name' => 'Budi Lama']);
+        AccessLog::factory()->manual()->create(['processed_by' => $karyawan->id]);
+        // Soft deleted: the row, and so the name, stays for the audit trail.
+        $karyawan->delete();
+
+        $response = $this->actingAs($admin)->getJson('/api/access-logs');
+
+        $response->assertOk();
+        $response->assertJsonFragment(['processed_by' => ['id' => $karyawan->id, 'name' => 'Budi Lama', 'deleted' => true]]);
     }
 }

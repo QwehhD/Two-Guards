@@ -77,7 +77,7 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
 
     return (
         <>
-            <div className="border-sidebar-border/80 border-b">
+            <div className="border-sidebar-border bg-background/85 sticky top-0 z-40 border-b backdrop-blur">
                 <div className="mx-auto flex h-16 items-center px-4 md:max-w-7xl">
                     {/* Mobile Menu */}
                     <div className="lg:hidden">
@@ -107,7 +107,7 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                                             <Link
                                                 key={item.title}
                                                 to={item.href}
-                                                className="flex items-center space-x-2 font-medium"
+                                                className="label-mono flex items-center space-x-2"
                                             >
                                                 {item.icon && (
                                                     <item.icon className="h-5 w-5" />
@@ -142,7 +142,7 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                                                     item.href,
                                                     activeItemStyles,
                                                 ),
-                                                'h-9 cursor-pointer px-3',
+                                                'h-9 cursor-pointer px-3 font-mono text-xs tracking-wider uppercase',
                                             )}
                                         >
                                             {item.icon && (
@@ -151,7 +151,7 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                                             {item.title}
                                         </Link>
                                         {isCurrentUrl(item.href) && (
-                                            <div className="absolute bottom-0 left-0 h-0.5 w-full translate-y-px bg-black dark:bg-white"></div>
+                                            <div className="bg-primary absolute bottom-0 left-0 h-0.5 w-full translate-y-px"></div>
                                         )}
                                     </NavigationMenuItem>
                                 ))}

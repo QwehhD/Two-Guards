@@ -8,8 +8,30 @@ php artisan migrate --seed
 ```
 
 Seeder membuat satu admin (`admin@example.com`) dan dua karyawan, semuanya dengan password
-`password`. Pendaftaran mandiri dan reset password publik ditutup: akun lain dibuat, dan
-password diganti, oleh admin di halaman **Akun** (`/users`).
+`password`.
+
+## Akun
+
+Pendaftaran mandiri, hapus akun sendiri, dan reset password publik semuanya ditutup. Akun
+dibuat, dihapus, dan password-nya diganti hanya oleh admin di halaman **Akun** (`/users`),
+dengan dua batasan:
+
+- admin tidak bisa menghapus akunnya sendiri;
+- admin terakhir tidak bisa dihapus maupun diturunkan menjadi karyawan. Aturan ini dijaga di
+  model `User`, jadi berlaku juga lewat `php artisan tinker`.
+
+### Jalan darurat: admin lupa password
+
+Kalau tidak ada admin yang bisa login lagi, ganti password langsung dari server:
+
+```bash
+php artisan user:set-password admin@example.com
+```
+
+Password baru ditanyakan dua kali tanpa ditampilkan, dengan aturan yang sama seperti di
+aplikasi. Sengaja tidak bisa diberikan sebagai argumen, supaya tidak tersimpan di riwayat
+shell atau terlihat di daftar proses. Perintah ini perlu terminal interaktif, jadi tidak bisa
+dipakai dengan `--no-interaction`.
 
 ## Menjalankan
 
@@ -75,6 +97,22 @@ kode selain 0. Worker Laravel tidak pernah begitu: `queue:restart` membuatnya ke
 kode 0, dan setelah job melewati `$timeout` worker mematikan dirinya dengan SIGKILL. Tanpa loop,
 satu percobaan yang macet saja sudah membuat command approve/reject berikutnya tidak terkirim
 sampai `composer dev` dijalankan ulang.
+
+## Menghentikan `mqtt:listen`
+
+SIGTERM (misalnya dari Supervisor atau `kill`) maupun SIGINT (Ctrl+C) menghentikan daemon dengan
+rapi dalam kondisi apa pun:
+
+| Saat sinyal datang | Yang terjadi |
+| --- | --- |
+| Sedang mendengarkan | Loop dihentikan, koneksi ditutup (DISCONNECT), lalu keluar |
+| Menunggu retry karena broker tak terjangkau | Keluar saat itu juga, tanpa mencoba lagi |
+| Sedang menghubungkan ke broker | Keluar begitu percobaan itu selesai (paling lama `MQTT_CONNECT_TIMEOUT`, bawaan 3 detik) |
+
+Command yang belum di-PUBACK saat berhenti dicatat dengan alasan `shutdown`. Satu-satunya keadaan
+yang tidak bisa diakhiri sinyal pertama adalah broker yang menerima koneksi tetapi tidak pernah
+membalas CONNACK; sinyal kedua langsung menghentikan proses. Untuk Supervisor, `stopsignal=TERM`
+dengan `stopwaitsecs` di atas connect timeout sudah cukup.
 
 ## Database (SQLite)
 

@@ -18,7 +18,7 @@ const STATUS_ICON: Record<AccessLogStatus, LucideIcon> = {
 };
 
 const STATUS_COLOR: Record<AccessLogStatus, string> = {
-    approved: 'text-emerald-600 dark:text-emerald-400',
+    approved: 'text-primary',
     denied: 'text-destructive',
     pending: 'text-amber-600 dark:text-amber-400',
     expired: 'text-muted-foreground',
@@ -33,47 +33,29 @@ type Props = {
  * a relative timestamp, and the mode — never who scanned in or who
  * approved it (that data never even reaches the frontend; see
  * PublicAccessLogResource on the backend).
+ *
+ * Drawn as a row of grid cells, one per scan, newest first.
  */
 export function RecentActivityList({ activity }: Props) {
     if (activity.length === 0) {
-        return (
-            <p className="text-muted-foreground text-center text-sm">
-                Belum ada aktivitas.
-            </p>
-        );
+        return <p className="label-mono text-muted-foreground px-6 py-10 text-center">Belum ada aktivitas.</p>;
     }
 
     return (
-        <ul className="divide-border overflow-hidden rounded-xl border">
+        <ul className="grid sm:grid-cols-2 lg:grid-cols-5">
             {activity.map((entry, index) => {
                 const Icon = STATUS_ICON[entry.status];
 
                 return (
-                    <li
-                        key={index}
-                        className={cn(
-                            'flex items-center gap-3 px-4 py-3',
-                            index > 0 && 'border-border border-t',
-                        )}
-                    >
-                        <Icon
-                            className={cn('size-5 shrink-0', STATUS_COLOR[entry.status])}
-                        />
-                        <span className="flex-1 text-sm">
-                            {STATUS_LABEL[entry.status]}
-                            {entry.scanned_at && (
-                                <span className="text-muted-foreground">
-                                    {' '}
-                                    — {entry.scanned_at}
-                                </span>
-                            )}
-                        </span>
-                        <Badge
-                            variant={entry.mode === 'auto' ? 'default' : 'secondary'}
-                            className="shrink-0"
-                        >
-                            {entry.mode === 'auto' ? 'Otomatis' : 'Manual'}
-                        </Badge>
+                    <li key={index} className="bg-card flex flex-col gap-4 border-b p-6 sm:border-r">
+                        <div className="flex items-center justify-between gap-2">
+                            <Icon className={cn('size-6 shrink-0', STATUS_COLOR[entry.status])} />
+                            <Badge variant={entry.mode === 'auto' ? 'default' : 'secondary'}>
+                                {entry.mode === 'auto' ? 'Otomatis' : 'Manual'}
+                            </Badge>
+                        </div>
+                        <span className="font-mono text-sm font-bold uppercase">{STATUS_LABEL[entry.status]}</span>
+                        {entry.scanned_at && <span className="label-mono text-muted-foreground">{entry.scanned_at}</span>}
                     </li>
                 );
             })}

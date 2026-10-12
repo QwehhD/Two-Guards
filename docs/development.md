@@ -171,3 +171,59 @@ php artisan test --group=deferred-security  # test 2FA/passkey yang sengaja di-s
 
 Test di grup `deferred-security` selalu di-skip dengan alasan yang tertulis: fiturnya ditunda,
 bukan dibuang, dan test-nya disimpan sebagai pengingat sampai fitur itu dibuat ulang sebagai API.
+
+## Sebelum commit: `composer test`
+
+`composer test` adalah pengecekan wajib sebelum setiap commit. Commit hanya kalau perintah ini
+keluar dengan kode 0:
+
+```bash
+composer test; echo "exit=$?"
+```
+
+Langkahnya berurutan, dan berhenti di langkah pertama yang gagal:
+
+| Langkah | Memeriksa |
+| --- | --- |
+| `php artisan config:clear` | membuang cache config, supaya test memakai config terbaru |
+| `composer lint:check` | format kode PHP di seluruh project dengan Pint (`composer lint` memperbaikinya) |
+| `composer phpstan:check` | analisis statis PHPStan (Larastan) level 7, terhadap baseline |
+| `php artisan test` | seluruh test PHPUnit |
+
+`composer test` belum memeriksa frontend. Kalau mengubah `resources/js`, jalankan juga
+`npm run types:check` (TypeScript) dan `npm run build`.
+
+`composer types:check` adalah nama lama `composer phpstan:check` dan masih bisa dipakai. Nama
+barunya dipakai supaya tidak tertukar dengan `npm run types:check`, yang menjalankan `tsc`.
+
+PHPStan diberi `--memory-limit=1G` oleh script composer, jadi `memory_limit` di php.ini (128M)
+tidak perlu diubah. Kalau menjalankan `vendor/bin/phpstan` langsung, tambahkan opsi itu sendiri.
+
+### Baseline PHPStan
+
+`phpstan-baseline.neon` mencatat error PHPStan yang sudah ada ketika baseline dibuat (30 error,
+12 Oktober 2026). Error yang tercatat di sana tidak menggagalkan analisis; error baru selalu
+menggagalkan.
+
+Baseline hanya boleh menyusut. Setelah sebuah error yang tercatat di baseline diperbaiki,
+PHPStan justru gagal, karena baseline masih mengharapkan error itu:
+
+```
+Ignored error pattern #^Using nullsafe property access ...$# (nullsafe.neverNull) in path
+.../app/Http/Resources/AccessLogResource.php was not matched in reported errors.
+```
+
+Kalau error yang sama muncul beberapa kali dan hanya sebagian yang diperbaiki, pesannya
+berbunyi "is expected to occur N times, but occurred only M times". Untuk keduanya, perbarui
+baseline:
+
+```bash
+composer phpstan:baseline
+git diff phpstan-baseline.neon   # hanya boleh ada baris yang dihapus
+```
+
+lalu commit `phpstan-baseline.neon` bersama perbaikannya. Jangan memakai
+`composer phpstan:baseline` untuk menyembunyikan error baru: kalau `git diff` menunjukkan baris
+yang bertambah, perbaiki error itu alih-alih memasukkannya ke baseline. Pesan "is expected to
+occur N times, but occurred M times" tanpa kata "only" juga berarti error baru: error yang
+sama muncul lebih sering daripada yang tercatat.

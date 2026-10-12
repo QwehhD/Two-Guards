@@ -1,6 +1,8 @@
 import { AlertCircle } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { GateScene } from '@/components/gate-scene';
+import { PageHeader } from '@/components/page-header';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -104,12 +106,11 @@ export default function Dashboard() {
 
     return (
         <div className="flex flex-1 flex-col gap-4 p-4">
-            <div>
-                <h1 className="text-xl font-semibold">Dashboard</h1>
-                <p className="text-muted-foreground text-sm">
-                    Kondisi setiap portal, diperbarui otomatis setiap kali perangkat mengirim status.
-                </p>
-            </div>
+            <PageHeader
+                eyebrow="Perangkat"
+                title="Dashboard"
+                description="Kondisi setiap portal, diperbarui otomatis setiap kali perangkat mengirim status."
+            />
 
             {error && (
                 <Alert variant="destructive">
@@ -144,6 +145,12 @@ export default function Dashboard() {
                                     <CardTitle>{device.name}</CardTitle>
                                 </CardHeader>
                                 <CardContent className="flex flex-col gap-3 text-sm">
+                                    <GateScene
+                                        open={device.portal_status === 'open'}
+                                        online={device.status === 'online'}
+                                        className="mx-auto max-w-56"
+                                    />
+
                                     <div className="flex flex-wrap gap-2">
                                         <Badge variant={device.status === 'online' ? 'default' : 'destructive'}>
                                             {device.status === 'online' ? 'Online' : 'Offline'}

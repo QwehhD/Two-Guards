@@ -1,15 +1,19 @@
 # Kontrak topic MQTT
 
+**Versi kontrak: 2** (12 Oktober 2026). Perubahan antarversi ada di [Riwayat versi](#riwayat-versi).
+
 Dokumen ini adalah kontrak antara server Two-Guards dan perangkat portal (ESP32 + RFID).
 Firmware dibangun mengikuti dokumen ini; kalau kode dan dokumen ini berbeda, perbaiki
-salah satunya bersamaan, jangan dibiarkan.
+salah satunya bersamaan, jangan dibiarkan. Firmware ada di repo terpisah
+(Two-Guards-Hardware) dan mencatat versi kontrak yang diikutinya di README-nya; setiap
+perubahan kontrak menaikkan versi ini dan butuh perubahan pasangan di sana.
 
 ## Ringkasan
 
 | Topic | Arah | QoS | Retain | Dikirim oleh |
 | --- | --- | --- | --- | --- |
 | `parkir/{device_id}/scan` | device → server | 1 | tidak | ESP32 |
-| `parkir/{device_id}/status` | device → server | 1 | tidak | ESP32, dan broker (LWT) |
+| `parkir/{device_id}/status` | device → server | 1 | **ya** | ESP32, dan broker (LWT) |
 | `parkir/{device_id}/command` | server → device | 1 | tidak | `PublishDeviceCommand` (manual) atau `mqtt:listen` (auto) |
 
 `{device_id}` adalah `id` numerik di tabel `devices`. Broker diatur lewat `MQTT_HOST`,
@@ -70,6 +74,22 @@ Heartbeat device, sekaligus Last Will (LWT) yang dikirim broker ketika device pu
 LWT cukup `{"online": false}` tanpa `portal_status`: device yang putus tidak tahu posisi
 palang, jadi server hanya menandai offline dan tidak menebak status portal.
 
+### Retained
+
+Heartbeat dan LWT sama-sama dikirim **retained**. Broker menyimpan status terakhir tiap device
+dan langsung mengirimkannya ke siapa pun yang subscribe: `mqtt:listen` setiap kali tersambung
+ulang, dan `mosquitto_sub` saat memantau. Device yang mati selama server tidak berjalan tetap
+terbaca offline, karena LWT-nya ikut tersimpan.
+
+Pesan yang diputar ulang broker datang dengan flag retain, dan waktu pengirimannya tidak
+diketahui; bisa berjam-jam yang lalu. Karena itu `mqtt:listen` memakai pesan retained untuk
+`online` dan `portal_status`, tetapi **tidak memperbarui `last_seen_at`**. Kolom itu hanya
+diisi waktu terima status yang datang langsung, yaitu yang dikirim device saat daemon sudah
+subscribe (tanpa flag retain).
+
+Broker di sini berjalan tanpa `persistence`, jadi status yang tersimpan hilang saat broker
+di-restart. Heartbeat berikutnya dari device mengisinya lagi.
+
 ## `parkir/{device_id}/command`
 
 Perintah ke portal.
@@ -124,7 +144,9 @@ Payload dan topic ini dibangun di satu tempat saja, `App\Mqtt\DeviceCommand`.
 4. **Subscribe `parkir/{device_id}/command` dengan QoS 1 dan clean session**, supaya broker
    tidak menimbun command selama device offline lalu mengirimkannya sekaligus saat device
    tersambung lagi.
-5. Belum ada ack end-to-end dari device. `access_log_id` sudah disiapkan untuk itu: rencananya
+5. **Kirim status dengan QoS 1 dan retained**, baik heartbeat maupun LWT `{"online": false}`.
+   Scan tidak pernah retained: scan lama yang diputar ulang bisa membuka gerbang.
+6. Belum ada ack end-to-end dari device. `access_log_id` sudah disiapkan untuk itu: rencananya
    device melaporkan hasil eksekusi beserta `access_log_id`.
 
 ## Mencoba tanpa hardware
@@ -150,13 +172,23 @@ mosquitto_pub -h localhost -u device-1 -P "$MQTT_DEVICE_PASSWORD" \
 mosquitto_pub -h localhost -u device-1 -P "$MQTT_DEVICE_PASSWORD" \
   -t parkir/1/scan -m "{\"uid\":\"A1B2C3D4\",\"scanned_at\":$(date +%s)}"
 
-# Heartbeat dan LWT
-mosquitto_pub -h localhost -u device-1 -P "$MQTT_DEVICE_PASSWORD" \
+# Heartbeat dan LWT, retained seperti yang dikirim ESP32
+mosquitto_pub -h localhost -u device-1 -P "$MQTT_DEVICE_PASSWORD" -q 1 -r \
   -t parkir/1/status -m '{"online":true,"portal_status":"closed"}'
-mosquitto_pub -h localhost -u device-1 -P "$MQTT_DEVICE_PASSWORD" \
+mosquitto_pub -h localhost -u device-1 -P "$MQTT_DEVICE_PASSWORD" -q 1 -r \
   -t parkir/1/status -m '{"online":false}'
 ```
+
+Status simulasi ikut tersimpan di broker sampai ditimpa status berikutnya, misalnya heartbeat
+dari ESP32 sungguhan.
 
 Command tidak bisa disimulasikan dengan `device-1` maupun `two-guards-monitor`: ACL menolaknya
 diam-diam (penolakannya baru terlihat dengan `mosquitto_pub -V mqttv5 -q 1`). Untuk memicu
 command, simulasikan scan seperti di atas.
+
+## Riwayat versi
+
+| Versi | Tanggal | Perubahan |
+| --- | --- | --- |
+| 2 | 12 Oktober 2026 | Broker wajib login: satu akun per device dan ACL, hanya server yang boleh publish command. Status dan LWT dikirim retained; `last_seen_at` hanya dari status yang datang langsung. |
+| 1 | Tahap 9 | Kontrak awal: broker tanpa akun, status tidak retained. |

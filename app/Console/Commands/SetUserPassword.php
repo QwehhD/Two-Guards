@@ -27,7 +27,9 @@ class SetUserPassword extends Command
         $user = User::query()->where('email', $email)->first();
 
         if ($user === null) {
-            $this->error("No account with the email [{$email}].");
+            $this->error(User::onlyTrashed()->where('email', $email)->exists()
+                ? "The account [{$email}] has been deleted; a deleted account can't log in, so its password isn't set."
+                : "No account with the email [{$email}].");
 
             return self::FAILURE;
         }

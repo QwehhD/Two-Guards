@@ -34,6 +34,15 @@ class SetUserPasswordCommandTest extends TestCase
             ->assertFailed();
     }
 
+    public function test_a_deleted_account_gets_a_clear_message(): void
+    {
+        User::factory()->create(['email' => 'pergi@example.test'])->delete();
+
+        $this->artisan('user:set-password', ['email' => 'pergi@example.test'])
+            ->expectsOutputToContain("The account [pergi@example.test] has been deleted; a deleted account can't log in, so its password isn't set.")
+            ->assertFailed();
+    }
+
     public function test_a_mismatched_confirmation_changes_nothing(): void
     {
         $user = User::factory()->create(['email' => 'karyawan@example.test']);

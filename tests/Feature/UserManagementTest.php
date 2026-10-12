@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Enums\UserRole;
+use App\Exceptions\LastAdminException;
+use App\Models\AccessLog;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -174,5 +176,96 @@ class UserManagementTest extends TestCase
 
         $response->assertForbidden();
         $this->assertDatabaseHas('users', ['id' => $target->id]);
+    }
+
+    public function test_admin_cannot_delete_their_own_account(): void
+    {
+        $admin = User::factory()->create(['role' => UserRole::Admin]);
+        // A second admin, so it's the self-delete rule doing the refusing.
+        User::factory()->create(['role' => UserRole::Admin]);
+
+        $response = $this->actingAs($admin)->deleteJson("/api/users/{$admin->id}");
+
+        $response->assertForbidden();
+        $response->assertJsonFragment(['message' => 'Anda tidak bisa menghapus akun Anda sendiri.']);
+        $this->assertDatabaseHas('users', ['id' => $admin->id]);
+    }
+
+    public function test_admin_can_delete_another_admin(): void
+    {
+        $admin = User::factory()->create(['role' => UserRole::Admin]);
+        $otherAdmin = User::factory()->create(['role' => UserRole::Admin]);
+
+        $this->actingAs($admin)->deleteJson("/api/users/{$otherAdmin->id}")->assertNoContent();
+
+        $this->assertDatabaseMissing('users', ['id' => $otherAdmin->id]);
+    }
+
+    public function test_deleting_an_account_keeps_the_access_logs_it_processed(): void
+    {
+        $admin = User::factory()->create(['role' => UserRole::Admin]);
+        $karyawan = User::factory()->create(['role' => UserRole::Karyawan]);
+        $log = AccessLog::factory()->pending()->create();
+        $log->update(['status' => 'approved', 'processed_by' => $karyawan->id, 'processed_at' => now()]);
+
+        $this->actingAs($admin)->deleteJson("/api/users/{$karyawan->id}")->assertNoContent();
+
+        // The history stays; only "processed by" is forgotten.
+        $this->assertDatabaseHas('access_logs', ['id' => $log->id, 'status' => 'approved', 'processed_by' => null]);
+    }
+
+    public function test_the_last_admin_cannot_be_demoted(): void
+    {
+        $admin = User::factory()->create(['role' => UserRole::Admin]);
+
+        $response = $this->actingAs($admin)->putJson("/api/users/{$admin->id}", [
+            'name' => $admin->name,
+            'email' => $admin->email,
+            'role' => UserRole::Karyawan->value,
+        ]);
+
+        $response->assertUnprocessable();
+        $response->assertJsonValidationErrors(['role' => 'Admin terakhir tidak bisa diturunkan menjadi karyawan.']);
+        $this->assertSame(UserRole::Admin, $admin->fresh()->role);
+    }
+
+    public function test_an_admin_can_be_demoted_while_another_admin_remains(): void
+    {
+        $admin = User::factory()->create(['role' => UserRole::Admin]);
+        $otherAdmin = User::factory()->create(['role' => UserRole::Admin]);
+
+        $this->actingAs($admin)->putJson("/api/users/{$otherAdmin->id}", [
+            'name' => $otherAdmin->name,
+            'email' => $otherAdmin->email,
+            'role' => UserRole::Karyawan->value,
+        ])->assertOk();
+
+        $this->assertSame(UserRole::Karyawan, $otherAdmin->fresh()->role);
+    }
+
+    public function test_the_last_admin_cannot_be_deleted_even_outside_the_api(): void
+    {
+        $admin = User::factory()->create(['role' => UserRole::Admin]);
+
+        $this->expectException(LastAdminException::class);
+
+        try {
+            $admin->delete();
+        } finally {
+            $this->assertDatabaseHas('users', ['id' => $admin->id]);
+        }
+    }
+
+    public function test_the_last_admin_cannot_be_demoted_even_outside_the_api(): void
+    {
+        $admin = User::factory()->create(['role' => UserRole::Admin]);
+
+        $this->expectException(LastAdminException::class);
+
+        try {
+            $admin->update(['role' => UserRole::Karyawan]);
+        } finally {
+            $this->assertDatabaseHas('users', ['id' => $admin->id, 'role' => UserRole::Admin->value]);
+        }
     }
 }

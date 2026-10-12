@@ -1,0 +1,169 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Cannot call method interrupt\(\) on null\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: app/Console/Commands/MqttListen.php
+
+		-
+			message: '#^Parameter \#1 \$device of method App\\Services\\AccessDecisionService\:\:decide\(\) expects App\\Models\\Device, App\\Models\\Device\|Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\Device\> given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/AccessLogController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Api\\PublicPortalStatusController\:\:snapshot\(\) should return Illuminate\\Support\\Collection\<int, array\<string, string\>\> but returns Illuminate\\Support\\Collection\<int, array\{name\: string, status\: ''offline''\|''online'', portal_status\: ''closed''\|''open'', mode\: ''auto''\|''manual''\}\>\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/Api/PublicPortalStatusController.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\AccessLogResource\:\:\$device\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Resources/AccessLogResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\AccessLogResource\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/AccessLogResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\AccessLogResource\:\:\$mode\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/AccessLogResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\AccessLogResource\:\:\$processed_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/AccessLogResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\AccessLogResource\:\:\$processor\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/AccessLogResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\AccessLogResource\:\:\$rfid_card_id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Resources/AccessLogResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\AccessLogResource\:\:\$scanned_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/AccessLogResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\AccessLogResource\:\:\$scanned_uid\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/AccessLogResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\AccessLogResource\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/AccessLogResource.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>owner_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Resources/AccessLogResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\PublicAccessLogResource\:\:\$mode\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/PublicAccessLogResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\PublicAccessLogResource\:\:\$scanned_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/PublicAccessLogResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\PublicAccessLogResource\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/PublicAccessLogResource.php
+
+		-
+			message: '#^Method App\\Http\\Resources\\PublicAccessLogResource\:\:toArray\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: app/Http/Resources/PublicAccessLogResource.php
+
+		-
+			message: '#^Method App\\Models\\AccessLog\:\:device\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\BelongsTo does not specify its types\: TRelatedModel, TDeclaringModel$#'
+			identifier: missingType.generics
+			count: 1
+			path: app/Models/AccessLog.php
+
+		-
+			message: '#^Method App\\Models\\AccessLog\:\:processor\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\BelongsTo does not specify its types\: TRelatedModel, TDeclaringModel$#'
+			identifier: missingType.generics
+			count: 1
+			path: app/Models/AccessLog.php
+
+		-
+			message: '#^Method App\\Models\\AccessLog\:\:rfidCard\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\BelongsTo does not specify its types\: TRelatedModel, TDeclaringModel$#'
+			identifier: missingType.generics
+			count: 1
+			path: app/Models/AccessLog.php
+
+		-
+			message: '#^Method App\\Models\\Device\:\:accessLogs\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\HasMany does not specify its types\: TRelatedModel, TDeclaringModel$#'
+			identifier: missingType.generics
+			count: 1
+			path: app/Models/Device.php
+
+		-
+			message: '#^Method App\\Models\\RfidCard\:\:accessLogs\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\HasMany does not specify its types\: TRelatedModel, TDeclaringModel$#'
+			identifier: missingType.generics
+			count: 1
+			path: app/Models/RfidCard.php
+
+		-
+			message: '#^Method App\\Models\\RfidCard\:\:creator\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\BelongsTo does not specify its types\: TRelatedModel, TDeclaringModel$#'
+			identifier: missingType.generics
+			count: 1
+			path: app/Models/RfidCard.php
+
+		-
+			message: '#^Method App\\Models\\User\:\:processedAccessLogs\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\HasMany does not specify its types\: TRelatedModel, TDeclaringModel$#'
+			identifier: missingType.generics
+			count: 1
+			path: app/Models/User.php
+
+		-
+			message: '#^Method App\\Models\\User\:\:rfidCards\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\HasMany does not specify its types\: TRelatedModel, TDeclaringModel$#'
+			identifier: missingType.generics
+			count: 1
+			path: app/Models/User.php
+
+		-
+			message: '#^Parameter \#2 \$string of function explode expects string, bool\|string given\.$#'
+			identifier: argument.type
+			count: 1
+			path: config/cors.php
+
+		-
+			message: '#^Parameter \#2 \$string of function explode expects string, bool\|string given\.$#'
+			identifier: argument.type
+			count: 1
+			path: config/sanctum.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\RfidCard\|Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\RfidCard\>\:\:\$uid\.$#'
+			identifier: property.notFound
+			count: 1
+			path: database/factories/AccessLogFactory.php

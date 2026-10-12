@@ -1,6 +1,10 @@
 includes:
     - vendor/larastan/larastan/extension.neon
     - vendor/nesbot/carbon/extension.neon
+    # Errors that already existed when the baseline was taken; only new ones
+    # fail the analysis. Shrink it with `composer phpstan:baseline` after
+    # fixing one (see docs/development.md).
+    - phpstan-baseline.neon
 
 parameters:
     paths:

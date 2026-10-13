@@ -1,3 +1,4 @@
+import { ArrowLeft } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import AppLogoIcon from '@/components/app-logo-icon';
 import { Marker } from '@/components/marker';
@@ -34,6 +35,13 @@ export default function AuthSimpleLayout({
                     {children}
                 </div>
             </div>
+            <Link
+                to="/"
+                className="label-mono text-muted-foreground hover:text-foreground flex items-center gap-2 transition-colors"
+            >
+                <ArrowLeft className="size-4" />
+                Kembali ke beranda
+            </Link>
         </div>
     );
 }

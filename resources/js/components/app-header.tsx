@@ -1,4 +1,4 @@
-import { CreditCard, History, LayoutGrid, Menu, ShieldCheck, UserCog } from 'lucide-react';
+import { ArrowLeft, CreditCard, History, LayoutGrid, Menu, ShieldCheck, UserCog } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import AppLogo from '@/components/app-logo';
 import AppLogoIcon from '@/components/app-logo-icon';
@@ -116,6 +116,13 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                                             </Link>
                                         ))}
                                     </div>
+                                    <Link
+                                        to="/"
+                                        className="label-mono flex items-center space-x-2 border-t pt-4"
+                                    >
+                                        <ArrowLeft className="h-5 w-5" />
+                                        <span>Beranda</span>
+                                    </Link>
                                 </div>
                             </SheetContent>
                         </Sheet>
@@ -160,6 +167,13 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                     </div>
 
                     <div className="ml-auto flex items-center space-x-2">
+                        {/* Back to the public landing page, which shows the live gate. */}
+                        <Button asChild variant="outline" size="sm">
+                            <Link to="/" aria-label="Kembali ke beranda">
+                                <ArrowLeft />
+                                <span className="hidden sm:inline">Beranda</span>
+                            </Link>
+                        </Button>
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
